@@ -1,4 +1,0 @@
-Method,Trainable Parameters,GPU Memory (VRAM),Storage Overhead,Catastrophic Forgetting Risk,Inference Latency Overhead,Target Use Case
-Full Fine-Tuning (FFT),100%,16x model size (optimizer states),100% per task checkpoint,High,0% (Native weights),Foundational domain shift with abundant compute
-LoRA (Low-Rank Adaptation),0.1% - 1.0%,3x model size (frozen base + adapter grads),<1% (~20-100MB adapter),Low (base weights frozen),0% (adapter can be folded into base),Task-specific adaptation and multi-tenant serving
-QLoRA (Quantized LoRA),0.1% - 1.0%,1.5x model size (4-bit NormalFloat base),<1% (~20-100MB adapter),Low (frozen NF4 base),0% after dequantization folding,Resource-constrained fine-tuning on consumer GPUs
