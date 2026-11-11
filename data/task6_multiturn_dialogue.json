@@ -1,0 +1,42 @@
+[
+  {
+    "turn_number":1,
+    "dialogue_type":"Broad Inquiry",
+    "user_inquiry":"What is the primary physical constraint preventing commercial superconducting quantum computers from operating at room temperature?",
+    "agent_response":"[Error: Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen\/qwen3.8-27b` in organization `org_01m6vvkadbevpatjcamdjxjejk` service tier `on_demand` on output tokens per minute (OTPM): Limit 1000, Used 789, Requested 450. Please try again in 14.34s. Need more tokens? Upgrade to Dev Tier today at https:\/\/console.groq.com\/settings\/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}]",
+    "context_retention_score":null,
+    "follow_up_accuracy":null,
+    "latency_sec":3.448,
+    "score_basis":"illustrative_scores_not_human_or_model_judged"
+  },
+  {
+    "turn_number":2,
+    "dialogue_type":"Follow-up Clarification",
+    "user_inquiry":"Can you mathematically specify how thermal energy k_B * T disrupts the superconducting Josephson energy E_J?",
+    "agent_response":"[Error: Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen\/qwen3.8-27b` in organization `org_01m6vvkadbevpatjcamdjxjejk` service tier `on_demand` on output tokens per minute (OTPM): Limit 1000, Used 725, Requested 450. Please try again in 10.5s. Need more tokens? Upgrade to Dev Tier today at https:\/\/console.groq.com\/settings\/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}]",
+    "context_retention_score":null,
+    "follow_up_accuracy":null,
+    "latency_sec":3.509,
+    "score_basis":"illustrative_scores_not_human_or_model_judged"
+  },
+  {
+    "turn_number":3,
+    "dialogue_type":"Critical Challenge",
+    "user_inquiry":"Some startup claims optomechanical room-temperature transducers bypass this entirely. How do you reconcile that with your previous point?",
+    "agent_response":"[Error: Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen\/qwen3.8-27b` in organization `org_01m6vvkadbevpatjcamdjxjejk` service tier `on_demand` on output tokens per minute (OTPM): Limit 1000, Used 662, Requested 450. Please try again in 6.72s. Need more tokens? Upgrade to Dev Tier today at https:\/\/console.groq.com\/settings\/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}]",
+    "context_retention_score":null,
+    "follow_up_accuracy":null,
+    "latency_sec":3.478,
+    "score_basis":"illustrative_scores_not_human_or_model_judged"
+  },
+  {
+    "turn_number":4,
+    "dialogue_type":"Comparative Synthesis",
+    "user_inquiry":"Synthesize this into a direct comparison between superconducting dilution cryogenics and room-temperature neutral atom architectures.",
+    "agent_response":"[Error: Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen\/qwen3.8-27b` in organization `org_01m6vvkadbevpatjcamdjxjejk` service tier `on_demand` on output tokens per minute (OTPM): Limit 1000, Used 598, Requested 450. Please try again in 2.88s. Need more tokens? Upgrade to Dev Tier today at https:\/\/console.groq.com\/settings\/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}]",
+    "context_retention_score":null,
+    "follow_up_accuracy":null,
+    "latency_sec":3.492,
+    "score_basis":"illustrative_scores_not_human_or_model_judged"
+  }
+]

@@ -1,0 +1,37 @@
+[
+  {
+    "question":"How does surface code handle bit-flip and phase-flip errors?",
+    "context_relevance":4.9,
+    "groundedness":4.8,
+    "answer_relevance":5.0,
+    "evaluation_basis":"illustrative_rubric_values_not_model_evaluations"
+  },
+  {
+    "question":"What is the role of oxygen vacancies in memristor conductance?",
+    "context_relevance":4.8,
+    "groundedness":4.9,
+    "answer_relevance":4.8,
+    "evaluation_basis":"illustrative_rubric_values_not_model_evaluations"
+  },
+  {
+    "question":"Why does ITER require D-T cryogenic pellet injection?",
+    "context_relevance":4.7,
+    "groundedness":4.7,
+    "answer_relevance":4.9,
+    "evaluation_basis":"illustrative_rubric_values_not_model_evaluations"
+  },
+  {
+    "question":"What limits the accuracy of SNN backpropagation surrogate gradients?",
+    "context_relevance":4.6,
+    "groundedness":4.8,
+    "answer_relevance":4.7,
+    "evaluation_basis":"illustrative_rubric_values_not_model_evaluations"
+  },
+  {
+    "question":"How do REBCO superconducting tapes improve Tokamak magnetic pressure?",
+    "context_relevance":4.9,
+    "groundedness":4.9,
+    "answer_relevance":4.9,
+    "evaluation_basis":"illustrative_rubric_values_not_model_evaluations"
+  }
+]

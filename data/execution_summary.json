@@ -1,0 +1,23 @@
+{
+  "completed_tasks": [
+    "Task 1",
+    "Task 2",
+    "Task 4",
+    "Task 5",
+    "Task 6",
+    "Task 7"
+  ],
+  "failed_tasks": [
+    {
+      "task": "Task 3",
+      "error": "unsupported operand type(s) for +: 'int' and 'NoneType'"
+    }
+  ],
+  "duration_seconds": 406.11,
+  "project_root": "/Users/pankajkumar/Documents/BITS COnv AI assignment/convai_assignment_02",
+  "data_directory": "/Users/pankajkumar/Documents/BITS COnv AI assignment/convai_assignment_02/data",
+  "figures_directory": "/Users/pankajkumar/Documents/BITS COnv AI assignment/convai_assignment_02/figures",
+  "groq_model": "qwen/qwen3.8-27b",
+  "random_seed": 42,
+  "note": "Task completion means code ran; it does not make illustrative metrics empirical."
+}

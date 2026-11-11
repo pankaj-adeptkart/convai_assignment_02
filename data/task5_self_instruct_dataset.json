@@ -1,0 +1,27 @@
+[
+  {
+    "instruction": "Synthesize the physical and computational foundation of Quantum Annealing.",
+    "input": "Transverse-field Ising Hamiltonian",
+    "output": "Adiabatic quantum annealing minimizes cost functions through quantum tunneling across energy barriers. Demonstrates fundamental trade-offs in scalable deployment for Quantum Annealing."
+  },
+  {
+    "instruction": "Synthesize the physical and computational foundation of Memristive Crossbars.",
+    "input": "Vector-Matrix Multiplication (VMM)",
+    "output": "Ohm's law and Kirchhoff's current law perform parallel O(1) analog dot products in crossbar arrays. Demonstrates fundamental trade-offs in scalable deployment for Memristive Crossbars."
+  },
+  {
+    "instruction": "Synthesize the physical and computational foundation of Stellarator Optimization.",
+    "input": "Quasi-symmetric magnetic equilibrium",
+    "output": "Modern stellarators employ 3D modular coils optimized via supercomputers to eliminate neoclassical transport. Demonstrates fundamental trade-offs in scalable deployment for Stellarator Optimization."
+  },
+  {
+    "instruction": "Synthesize the physical and computational foundation of Boson Sampling.",
+    "input": "Linear optical interferometers",
+    "output": "Matrix permanents governing photon bunching demonstrate hard complexity classes #P-complete for classical simulation. Demonstrates fundamental trade-offs in scalable deployment for Boson Sampling."
+  },
+  {
+    "instruction": "Synthesize the physical and computational foundation of Event-Based Vision.",
+    "input": "Neuromorphic asynchronous cameras",
+    "output": "DVS pixels fire only upon logarithmic intensity changes, reducing data bandwidth by 99% compared to frame-based video. Demonstrates fundamental trade-offs in scalable deployment for Event-Based Vision."
+  }
+]

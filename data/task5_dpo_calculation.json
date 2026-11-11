@@ -1,0 +1,15 @@
+{
+  "prompt": "Explain how surface code quantum error correction handles bit flips.",
+  "preferred_response_yw": "Surface code arranges qubits in a 2D grid with alternating X and Z stabilizer syndrome measurements, detecting and correcting bit-flip (X) errors through Z-stabilizer syndrome extraction without collapsing data superposition.",
+  "rejected_response_yl": "Quantum error correction just copies the qubit three times like a classical parity check, which protects against all quantum noise.",
+  "beta": 0.1,
+  "log_pi_theta_yw": -14.2,
+  "log_pi_ref_yw": -18.5,
+  "log_pi_theta_yl": -22.8,
+  "log_pi_ref_yl": -19.1,
+  "log_ratio_w": 4.3,
+  "log_ratio_l": -3.7,
+  "implicit_reward_diff": 0.8,
+  "sigmoid_value": 0.68997,
+  "dpo_loss": 0.3711
+}

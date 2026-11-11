@@ -1,0 +1,5 @@
+{
+  "evaluation_basis": "synthetic_demonstration_not_model_calibration",
+  "sample_count": 50,
+  "ece": 0.1219
+}

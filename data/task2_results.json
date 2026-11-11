@@ -1,0 +1,58 @@
+[
+  {
+    "query_id":"T2_Q1",
+    "category":"Quantum Computing",
+    "topic":"quantum error correction",
+    "tools_called":"academic_search, wikipedia_search, news_search",
+    "seq_latency_sec":0.31,
+    "par_latency_sec":0.126,
+    "speedup_pct":59.4,
+    "response":"[Error: Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen\/qwen3.8-27b` in organization `org_01m6vvkadbevpatjcamdjxjejk` service tier `on_demand` on output tokens per minute (OTPM): Limit 1000, Used 883, Requested 500. Please try again in 22.98s. Need more tokens? Upgrade to Dev Tier today at https:\/\/console.groq.com\/settings\/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}]",
+    "synthesis_status":"failed",
+    "task_completion":"Partial - tool or synthesis failure",
+    "retrieval_mode":"SIMULATED_MOCK_KNOWLEDGE_BASE_NOT_LIVE_SEARCH",
+    "safety_mechanisms_active":"Iteration Limit, Schema Validation, Repetition Detection, Timeout, Sanitization, Fallback"
+  },
+  {
+    "query_id":"T2_Q2",
+    "category":"Neuromorphic AI",
+    "topic":"memristor neuromorphic",
+    "tools_called":"academic_search, wikipedia_search, news_search",
+    "seq_latency_sec":0.308,
+    "par_latency_sec":0.122,
+    "speedup_pct":60.4,
+    "response":"[Error: Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen\/qwen3.8-27b` in organization `org_01m6vvkadbevpatjcamdjxjejk` service tier `on_demand` on output tokens per minute (OTPM): Limit 1000, Used 817, Requested 500. Please try again in 19.02s. Need more tokens? Upgrade to Dev Tier today at https:\/\/console.groq.com\/settings\/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}]",
+    "synthesis_status":"failed",
+    "task_completion":"Partial - tool or synthesis failure",
+    "retrieval_mode":"SIMULATED_MOCK_KNOWLEDGE_BASE_NOT_LIVE_SEARCH",
+    "safety_mechanisms_active":"Iteration Limit, Schema Validation, Repetition Detection, Timeout, Sanitization, Fallback"
+  },
+  {
+    "query_id":"T2_Q3",
+    "category":"Clean Fusion Energy",
+    "topic":"fusion confinement",
+    "tools_called":"academic_search, wikipedia_search, news_search",
+    "seq_latency_sec":0.31,
+    "par_latency_sec":0.124,
+    "speedup_pct":60.0,
+    "response":"[Error: Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen\/qwen3.8-27b` in organization `org_01m6vvkadbevpatjcamdjxjejk` service tier `on_demand` on output tokens per minute (OTPM): Limit 1000, Used 751, Requested 500. Please try again in 15.06s. Need more tokens? Upgrade to Dev Tier today at https:\/\/console.groq.com\/settings\/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}]",
+    "synthesis_status":"failed",
+    "task_completion":"Partial - tool or synthesis failure",
+    "retrieval_mode":"SIMULATED_MOCK_KNOWLEDGE_BASE_NOT_LIVE_SEARCH",
+    "safety_mechanisms_active":"Iteration Limit, Schema Validation, Repetition Detection, Timeout, Sanitization, Fallback"
+  },
+  {
+    "query_id":"T2_Q4",
+    "category":"High-Performance Computing",
+    "topic":"superconducting interconnects",
+    "tools_called":"academic_search, wikipedia_search, news_search",
+    "seq_latency_sec":0.309,
+    "par_latency_sec":0.127,
+    "speedup_pct":58.9,
+    "response":"[Error: Error code: 429 - {'error': {'message': 'Rate limit reached for model `qwen\/qwen3.8-27b` in organization `org_01m6vvkadbevpatjcamdjxjejk` service tier `on_demand` on output tokens per minute (OTPM): Limit 1000, Used 685, Requested 500. Please try again in 11.1s. Need more tokens? Upgrade to Dev Tier today at https:\/\/console.groq.com\/settings\/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}]",
+    "synthesis_status":"failed",
+    "task_completion":"Partial - tool or synthesis failure",
+    "retrieval_mode":"SIMULATED_MOCK_KNOWLEDGE_BASE_NOT_LIVE_SEARCH",
+    "safety_mechanisms_active":"Iteration Limit, Schema Validation, Repetition Detection, Timeout, Sanitization, Fallback"
+  }
+]

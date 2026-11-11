@@ -1,0 +1,47 @@
+{
+  "run_timestamp_utc": "2026-11-11T15:29:00.715178+00:00",
+  "python_version": "3.14.4",
+  "platform": "macOS-26.7.2-x86_64-i386-64bit-Mach-O",
+  "groq_model": "qwen/qwen3.8-27b",
+  "provider": "Groq",
+  "api_key_configured": true,
+  "random_seed": 42,
+  "package_versions": {
+    "groq": "1.7.0",
+    "python-dotenv": "1.2.4",
+    "pandas": "2.3.3",
+    "numpy": "2.4.4",
+    "matplotlib": "3.10.8",
+    "seaborn": "0.13.2",
+    "nbformat": "5.11.1",
+    "nbclient": "0.11.0",
+    "ipykernel": "7.4.0"
+  },
+  "experiment_data_files": [
+    "execution_summary.json",
+    "reproducibility_metadata.json",
+    "task1_results.json",
+    "task2_results.json",
+    "task2_security_result.json",
+    "task3_results.json",
+    "task4_calibration_metadata.json",
+    "task4_rag_triad.json",
+    "task4_results.json",
+    "task5_dpo_calculation.json",
+    "task5_peft_comparison.json",
+    "task5_self_instruct_dataset.json",
+    "task6_multiturn_dialogue.json",
+    "task6_results.json",
+    "task7_evaluation_results.json",
+    "task7_sample_audit_trail.json"
+  ],
+  "evaluation_limitations": [
+    "Task 1 keyword coverage is a lexical proxy, not factual correctness.",
+    "Task 2 uses local mock knowledge sources, not live web retrieval.",
+    "Task 4 conflict scenarios and synthetic ECE samples are demonstrations.",
+    "Task 4 model calibration requires claim-level confidence and independent correctness annotations.",
+    "Task 6 uses fixed RAG snippets and prompt-based specialization, not actual fine-tuning.",
+    "Task 6 CRS and FA have not been human-evaluated.",
+    "Task 7 quality and hallucination metrics have not been independently evaluated."
+  ]
+}
