@@ -1,0 +1,27 @@
+# End-to-End Research Assistant — project dependencies
+# Recommended interpreter: CPython 3.12
+# Install from the project root:
+#   python -m pip install --upgrade pip setuptools wheel
+#   python -m pip install -r requirements.txt
+
+# Core experiment runner
+groq
+python-dotenv
+pandas
+numpy
+matplotlib
+seaborn
+
+# Natural Questions dataset loading / Hugging Face streaming
+datasets
+pyarrow
+huggingface_hub
+
+# Evaluation / optional embedding utilities
+scikit-learn
+sentence-transformers
+
+# Notebook generation and execution
+nbformat
+nbclient
+ipykernel

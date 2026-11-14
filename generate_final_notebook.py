@@ -7,6 +7,8 @@ specifications and containing complete tabular structures, plots, and markdown a
 import os
 import json
 import base64
+import hashlib
+from pathlib import Path
 import pandas as pd
 import nbformat as nbf
 
@@ -63,8 +65,8 @@ def build_full_notebook():
 |---|---|---|---|---|
 | **Shradha Katakdhond** | `2025ae05331@wilp.bits-pilani.ac.in` | • Prompt Engineering & Multi-Step Reasoning<br>• Full Integration, Evaluation & Cost Engineering | **Task 1 & Task 7 Lead**: Implementation of Zero-Shot, Few-Shot, CoT, ToT, and APE prompting strategies; latency and cost tracking; `ResearchAssistant` class architecture; 10 held-out question evaluation; root-cause failure analysis; JSON audit trail; and production deployment recommendation. | Tasks 1 & 7 implementation, tables, Pareto trade-off analysis, and end-to-end integration code. |
 | **Mallu Lakshmi** | `2025ae05117@wilp.bits-pilani.ac.in` | • Multi-Source Function Calling & Security<br>• Visualization & Reporting | **Task 2 & Reporting Lead**: Implementation of 5 custom JSON schema tools (academic, Wikipedia, news, credibility, citation); scratch ReAct control loop; ThreadPool parallel calling vs sequential latency benchmarks; 6 safety mechanisms; 4 security threat analyses; indirect prompt injection defense demonstration; and multi-panel figures. | Task 2 tool execution, security attack interception logs, latency speedup bar charts, and comprehensive visual compilation. |
-| **Pankaj Kumar** | `2025ae05013@wilp.bits-pilani.ac.in` | • Memory, Decomposition & Context Engineering<br>• Paradigm Differentiation & Multi-Turn Research | **Task 3 & Task 6 Lead**: Implementation of bounded working memory (deque with rolling summary); 20 synthetic episodic sessions with reflection; CoT query decomposition; 3-tier context ablation study; empirical benchmarking of Prompting vs RAG vs Fine-Tuning; decision tree framework; and 4-turn research conversation measuring CRS and FA. | Tasks 3 & 6 ablation study metrics, multi-turn conversation dialogue tables, and paradigm comparison plots. |
-| **Aditya Reddy** | `2025ae05196@wilp.bits-pilani.ac.in` | • Multi-Source Synthesis, Calibration & RAG Triad<br>• Instruction Tuning, RLHF, PEFT & Alignment | **Task 4 & Task 5 Lead**: Implementation of credibility-weighted evidence scoring across 5 conflict scenarios; inline citation anchoring; atomic claim verification and hallucination self-correction; confidence calibration and Expected Calibration Error (ECE) reliability diagram; compact RAG Triad evaluation; Self-Instruct data generation (30 samples); exact step-by-step DPO loss mathematical calculation; and PEFT matrix (Full FT vs LoRA vs QLoRA). | Tasks 4 & 5 conflict resolution tables, calibration curve, DPO likelihood ratio derivations, and PEFT comparison matrix. |
+| **Pankaj Kumar** | `2025ae05013@wilp.bits-pilani.ac.in` | • Memory, Decomposition & Context Engineering<br>• Paradigm Differentiation & Multi-Turn Research | **Task 3 & Task 6 Lead**: Implementation of bounded working memory (deque with rolling summary); 20 synthetic episodic sessions with reflection; CoT query decomposition; 3-tier context ablation study; demonstration comparison of prompting, fixed-context prompting, and prompt-based specialization; decision framework; and 4-turn research conversation with CRS and FA marked not evaluated. | Tasks 3 & 6 ablation study metrics, multi-turn conversation dialogue tables, and paradigm comparison plots. |
+| **Aditya Reddy** | `2025ae05196@wilp.bits-pilani.ac.in` | • Multi-Source Synthesis, Calibration & RAG Triad<br>• Instruction Tuning, RLHF, PEFT & Alignment | **Task 4 & Task 5 Lead**: Implementation of rule-based source selection across 5 synthetic conflict scenarios; Groq-generated synthesis without claim-level verification or hallucination correction; synthetic ECE arithmetic demonstration (not model calibration); compact RAG Triad evaluation; Self-Instruct data generation (30 samples); illustrative step-by-step DPO loss arithmetic; and PEFT matrix (Full FT vs LoRA vs QLoRA). | Tasks 4 & 5 conflict resolution tables, calibration curve, DPO likelihood ratio derivations, and PEFT comparison matrix. |
 
 ---
 
@@ -73,10 +75,10 @@ The objective of this project is to architect, implement from scratch, evaluate,
 1. Multi-step reasoning across diverse problem complexities (Simple, Medium, Complex Multi-Hop, Ambiguous/Conflicting).
 2. Safe and parallelized multi-source function calling via an explicit ReAct loop without external framework abstractions (e.g. LangChain).
 3. Dual-tier agentic memory (bounded working memory + episodic memory with reflective adaptation), query decomposition, and context engineering.
-4. Evidence synthesis, credibility-weighted conflict resolution, hallucination self-correction, and confidence calibration (ECE).
+4. Rule-based conflict resolution by configured credibility value; hallucination and citation accuracy remain not evaluated.
 5. Self-instruct synthetic data curation, step-by-step Direct Preference Optimization (DPO) mathematical loss computation, and parameter-efficient fine-tuning (PEFT) analysis.
-6. Empirical paradigm differentiation (Prompting vs RAG vs Fine-Tuning) and coherent multi-turn research dialogue.
-7. End-to-end integration into a production `ResearchAssistant` class with structured JSON audit trails, claim-to-source traceability, and cost-engineering recommendations.
+6. Demonstration of prompting, fixed-context prompting, and prompt-based specialization, plus coherent multi-turn research dialogue. This is not a controlled quality comparison of RAG and actual fine-tuning.
+7. End-to-end integration into a production `ResearchAssistant` class with structured JSON audit trails, candidate claim-to-source attribution (not entailment verification), and cost-engineering recommendations.
 
 ### Dataset & Knowledge Base Specification
 - **Dataset / Source**: Curated technical domain corpus aligned with Natural Questions (NQ) and peer-reviewed literature across **Advanced Science & Computing** (Superconducting Quantum Processors, Neuromorphic AI & Synaptic Plasticity, Magnetic Confinement Fusion).
@@ -150,7 +152,8 @@ We benchmark **5 Prompting Techniques**:
 5. **Automatic Prompt Engineer (APE)**: Meta-prompt optimized persona and structured research synthesis protocol.
 
 ### 1.2 Evaluation Metrics
-- **Correctness (1.0 – 5.0)**: Evaluated against ground-truth technical axioms and factual completeness.
+- **Human/expert correctness (1.0–5.0)**: Not collected in this run; no correctness score is claimed.
+- **Keyword coverage (0–1)**: Lexical overlap with a short reference phrase; proxy only, not factual correctness.
 - **Reasoning Depth Proxy**: Count of structured analytical deduction steps, premises, and causal transitions.
 - **Latency (seconds)**: Wall-clock round-trip execution time via Groq API.
 - **Cost ($ USD)**: Calculated using exact token consumption ($0.20 per 1M input tokens, $0.20 per 1M output tokens).
@@ -160,9 +163,13 @@ We benchmark **5 Prompting Techniques**:
 df_task1 = pd.read_json("data/task1_results.json")
 
 # Display Tabular Comparison: Question, Category, Technique, Snippets, and Metrics
-display_cols = ["question_id", "category", "technique", "keyword_coverage", "reasoning_depth", "latency_sec", "cost_usd"]
-summary_table = df_task1[display_cols].sort_values(by=["category", "question_id", "keyword_coverage"], ascending=[True, True, False])
-print("=== TASK 1 EXPERIMENTAL RESULTS SUMMARY (50 EVALUATION RUNS) ===")
+display_cols = ["question_id", "category", "technique", "status", "keyword_coverage", "reasoning_depth", "latency_sec", "cost_usd"]
+summary_table = df_task1[display_cols].copy()
+summary_table["keyword_coverage"] = summary_table["keyword_coverage"].where(summary_table["keyword_coverage"].notna(), "NOT EVALUATED")
+summary_table = summary_table.sort_values(by=["category", "question_id", "technique"], ascending=[True, True, True])
+print("=== TASK 1 EXPERIMENTAL RESULTS SUMMARY (50 PLANNED RUNS) ===")
+print(f"Successful: {(df_task1['status'] == 'success').sum()} / {len(df_task1)}; unsuccessful/not evaluated: {(df_task1['status'] != 'success').sum()}")
+print("Latency columns separate successful API request time, retry waiting, and total elapsed time.")
 display(HTML(summary_table.to_html(index=False, classes="table table-striped table-bordered")))
 
 # Show Detailed Tabular Comparison with Full Prompts and Generated Responses for Representative Complex Query
@@ -195,7 +202,7 @@ display(HTML(sample_complex.to_html(index=False, classes="table table-hover")))
 As visualized in the Pareto Quality-Cost plot, compare measured API cost and latency against mean lexical keyword coverage. Coverage is not a correctness score; reasoning depth is a surface-structure proxy. Select a Pareto-efficient strategy from the generated results.
 
 ### 1.4 Limitations Observed & Possible Improvements
-- **Limitations**: Reasoning depth was measured using structural and linguistic transition proxies. While highly correlated with analytical rigor, it does not guarantee formal mathematical verification.
+- **Limitations**: Reasoning depth is a surface-structure proxy and keyword coverage is lexical overlap. Neither is validated as a measure of analytical rigor or factual correctness.
 - **Improvements**: Integrate a neurosymbolic verification engine (e.g., SymPy / Z3 theorem prover) to formally validate mathematical derivations produced in intermediate CoT/ToT branches.
 """
     cells.append(nbf.v4.new_markdown_cell(task1_analysis_md))
@@ -221,7 +228,7 @@ The objective of Task 2 is to build a safe, parallelized multi-source research a
 1. **Iteration Limits**: Hard cap of `max_iterations = 5` to prevent runaway operational costs.
 2. **Repetition Detection**: Hash tracking of recent tool names and argument signatures to eliminate infinite reasoning loops.
 3. **Tool-Failure Tracking & Graceful Degradation**: Catches external API exceptions and falls back to localized synthesis without crashing the agent.
-4. **Timeout Protection**: Strict 5-second per-tool timeout enforcement.
+4. **Soft Result-Wait Deadline**: The caller stops waiting after 5 seconds; Python cannot forcibly terminate an already-running worker thread, so this is not a hard execution timeout.
 5. **Strict Input Schema Validation**: Rejects malformed JSON arguments before execution.
 6. **Output Sanitization & Containment**: Strips harmful executable script tags and verifies response boundaries.
 
@@ -275,10 +282,10 @@ Parallel execution was compared with sequential execution using the local mock t
 
 #### 3. What trade-off exists between safety checks and execution cost?
 **Answer**:
-Implementing comprehensive safety mechanisms (JSON schema validation, regex threat scanning, repetition hashing, and sanitization) incurs a **sub-millisecond computational overhead** (<1ms in Python runtime) but prevents catastrophic failure modes:
+Implementing safety mechanisms (JSON schema validation, threat scanning, repetition hashing, and sanitization) adds local processing work. This run did not separately benchmark their overhead, so no numerical overhead claim is made:
 - Repetition detection prevents infinite loops that would rapidly exhaust the LLM context window and token budget.
 - Input validation rejects malformed queries locally before sending tokens to paid LLM endpoints.
-- The primary cost trade-off lies in multi-turn verification passes (e.g., secondary LLM guardrail calls), which can increase token consumption by 20–30%. However, lightweight rule-based and regex-based input guardrails provide high security with virtually zero token cost.
+- Secondary LLM verification passes can increase token consumption; the size of that increase depends on prompts and model responses and was not measured in this assignment. Local rule-based checks do not require additional LLM tokens.
 
 ### 2.3 Limitations Observed & Possible Improvements
 - **Limitations**: The current tool registry uses simulated domain endpoints for reproducibility.
@@ -325,6 +332,7 @@ df_task3 = pd.read_json("data/task3_results.json")
 print("=== TASK 3 CONTEXT ENGINEERING ABLATION RESULTS ===")
 display_cols_t3 = [
     "query_id", "category", "query", "sub_queries",
+    "condition_A_status", "condition_B_status", "condition_C_status",
     "condition_A_keyword_coverage", "condition_B_keyword_coverage",
     "condition_C_keyword_coverage", "condition_A_tokens",
     "condition_B_tokens", "condition_C_tokens",
@@ -350,18 +358,18 @@ print("Token counts may be provider-reported or estimated, as indicated per reco
 
 #### 1. How does memory help without becoming noise?
 **Answer**:
-Memory enhances synthesis by supplying **high-level behavioral reflections and methodological constraints** without flooding the context window with raw historical logs. 
+The design intends memory to supply **high-level behavioral reflections and methodological constraints** without flooding the context window with raw historical logs. The current run does not independently measure a quality gain, signal-to-noise ratio, or percentage of relevant tokens. 
 - Raw conversational history quickly introduces attention distraction, token bloat, and recency bias.
-- In our design, episodic memory extracts only the **reflective abstraction** (e.g., *"Always verify physical gate fidelity against two-qubit randomized benchmarking rather than single-qubit metrics"*) and bounded working memory periodically condenses operational steps into a 2-sentence rolling summary. This delivers high signal-to-noise ratio ($>90\\%$ relevant tokens) without context dilution.
+- In our design, episodic memory extracts only the **reflective abstraction** (e.g., *"Always verify physical gate fidelity against two-qubit randomized benchmarking rather than single-qubit metrics"*) and bounded working memory periodically condenses operational steps into a 2-sentence rolling summary. This is a design intention only; the experiment does not calculate a signal-to-noise ratio or measure the percentage of relevant tokens.
 
 #### 2. What is the marginal value of refinement?
 **Answer**:
-Iterative refinement provides critical marginal value on complex multi-hop queries where initial drafts omit secondary operational constraints or quantitative bounds. In our benchmarks, initial drafts frequently described surface codes qualitatively; the refinement pass detected missing threshold percentages and prompted inclusion of the exact **0.57% physical error threshold** and distance scaling bounds. The current experiment records refinement status and lexical coverage, but does not include a human- or expert-rated quality measure. Therefore, a numeric quality improvement cannot be claimed from these results.
+Iterative refinement provides critical marginal value on complex multi-hop queries where initial drafts omit secondary operational constraints or quantitative bounds. The current experiment records refinement status and lexical coverage, but does not include a human- or expert-rated quality measure. It therefore cannot establish that refinement consistently detects missing physical thresholds or improves factual correctness. A numeric quality improvement cannot be claimed from these results.
 
 #### 3. If context must be reduced by 30%, what would you trim first and why?
 **Answer**:
-If constrained to trim context tokens by 30%:
-1. **Trim First**: Raw working memory operational history and episodic session metadata (trimming the narrative of past sessions and retaining only the 1-sentence reflection). This reduces token load by ~20% with zero loss in factual precision.
+If constrained to trim context tokens, a reasonable design order is:
+1. **Trim First**: Raw working memory operational history and episodic session metadata (trimming the narrative of past sessions and retaining only the 1-sentence reflection). The actual token reduction and any effect on factual precision should be measured before making a quantitative claim.
 2. **Trim Second**: Detailed multi-shot exemplars and verbose system instructions, condensing them into concise imperative system prompts.
 3. **Never Trim**: The **verified domain evidence snippets** and the **decomposed sub-queries**. Ground truth evidence represents the core factual signal; pruning evidence directly causes factual hallucinations.
 
@@ -375,18 +383,16 @@ If constrained to trim context tokens by 30%:
     # TASK 4
     # -------------------------------------------------------------------------
     task4_md = """---
-## Task 4: Multi-Source Synthesis, Conflict Resolution, Hallucination Detection & Confidence Calibration (1.5 Marks)
+## Task 4: Rule-Based Multi-Source Conflict-Resolution Demonstration (1.5 Marks)
 **Lead Contributor**: Aditya Reddy (`2025ae05196@wilp.bits-pilani.ac.in`)
 
-### 4.1 Objective & Mathematical Methodology
+### 4.1 Objective & Implemented Method
 
 **Evaluation caveat:** Conflict scenarios are synthetic test fixtures. The runner records rule-based source selection and Groq-generated synthesis, but does not independently validate factual correctness, citation accuracy, or hallucination rates. Credibility percentages are configured heuristic weights, not externally audited publisher scores.
-Task 4 evaluates the assistant's ability to synthesize conflicting evidence from multiple publishers, systematically resolve contradictions, enforce citation grounding, detect and self-correct hallucinations, and calibrate output confidence.
+The current implementation is a rule-based conflict-resolution demonstration. It selects the source with the highest configured credibility value. It does not calculate credibility × relevance × authority, verify atomic claims, correct/regenerate hallucinated claims, or measure citation accuracy. Hallucination rate and citation accuracy are therefore reported as NOT EVALUATED.
 
-#### 1. Credibility-Weighted Evidence-Strength Scoring
-When heterogeneous sources present conflicting empirical claims, naive majority voting fails if multiple low-credibility sources repeat unsubstantiated claims. We implement **Credibility-Weighted Scoring**:
-$$\\text{Score}(H) = \\sum_{e \\in E_H} \\text{Credibility}(e) \\times \\text{Relevance}(e) \\times \\text{AuthorityTier}(e)$$
-Where peer-reviewed journals are weighted at 95–98%, established tech news at 70–82%, and unverified blogs at 20–35%.
+#### 1. Rule-Based Source Selection
+For each synthetic scenario, the runner sorts the three supplied sources by their configured `credibility` value and selects the highest. Relevance and authority are not separately scored, and configured credibility values are heuristic inputs rather than audited publisher ratings. This is a simple selection-rule demonstration, not the full credibility × relevance × authority formula.
 
 #### 2. 5 Conflict Scenarios Benchmark
 1. **Quantum Coherence**: Peer-reviewed PRX (120–160 $\\mu$s) vs Clickbait Blog (1,500 $\\mu$s at room temp) vs Press Release (350 $\\mu$s single-qubit).
@@ -395,23 +401,21 @@ Where peer-reviewed journals are weighted at 95–98%, established tech news at 
 4. **Tokamak Net Power Q-Factor**: Journal of Fusion Energy (No net grid electricity yet, JET $Q=0.67$) vs Blog (100,000 homes powered) vs Reuters (2030s targets).
 5. **LLM In-Context Learning**: ICLR (Activation dynamics in KV cache, 0 weight updates) vs Medium Post (Real-time meta-backprop) vs TechRadar (Implicit fine-tuning metaphor).
 
-#### 3. Hallucination Detection & Self-Correction Pipeline
-- Decomposes output into atomic factual claims.
-- Cross-references each claim against verified evidence sources.
-- Flags unsupported or exaggerated statements and regenerates the synthesis with strict evidence attribution.
+#### 3. Verification and Correction Status
+No claim-level evidence matching, entailment checking, hallucination detection, or answer regeneration/correction pass is implemented. Hallucination rate and citation accuracy are `NOT EVALUATED`.
 
 #### 4. Confidence Calibration & Expected Calibration Error (ECE)
 Expected Calibration Error quantifies the alignment between predicted model confidence and empirical accuracy across $B$ probability bins:
 $$\\text{ECE} = \\sum_{b=1}^{B} \\frac{|B_b|}{N} |\\text{acc}(B_b) - \\text{conf}(B_b)|$$
-The synthetic ECE plot demonstrates the ECE calculation only. The assistant's actual calibration is evaluated separately using claim-level confidence values and independent correctness annotations. ECE is reported only when these annotations are available. Citation support is evaluated separately by checking each cited source against its associated claim. Until the annotation file is completed, the assistant's ECE and citation-support results remain not evaluated.
+The synthetic ECE plot demonstrates the arithmetic only. The assistant has not been calibrated against independently labelled claim correctness. Actual ECE, citation support, and hallucination rates remain NOT EVALUATED.
 """
     cells.append(nbf.v4.new_markdown_cell(task4_md))
     t4_code = """# Load and display Task 4 Synthesis, Conflict Resolution & Calibration Results
 df_task4 = pd.read_json("data/task4_results.json")
 df_triad = pd.read_json("data/task4_rag_triad.json")
-# Tabular Display of 5 Conflict Scenarios and Credibility-Weighted Resolution
+# Tabular Display of 5 Synthetic Conflict Scenarios and Rule-Based Source Selection
 print("=== TASK 4 CONFLICT RESOLUTION BENCHMARK (5 CONFLICT SCENARIOS) ===")
-display_cols_t4 = ["scenario_id", "topic", "inquiry", "winner_credibility", "pre_correction_hallucination_pct", "post_correction_hallucination_pct", "citation_accuracy_pct", "conflict_resolved"]
+display_cols_t4 = ["scenario_id", "topic", "inquiry", "winner_credibility", "hallucination_metric_note", "citation_accuracy_note", "conflict_resolved"]
 display(HTML(df_task4[display_cols_t4].to_html(index=False, classes="table table-bordered")))
 
 # Before and After Conflict Resolution Case Comparison (Showing Answer Flip)
@@ -421,10 +425,6 @@ display(HTML(case_df.to_html(index=False, classes="table table-striped")))
 
 # Compact RAG Triad Evaluation on 5 Held-Out Questions
 print("=== RAG TRIAD ILLUSTRATIVE DATA (NOT AN EMPIRICAL EVALUATION) ===")
-display(HTML(df_triad.to_html(index=False, classes="table table-hover")))
-print("=== RAG TRIAD: ILLUSTRATIVE RUBRIC EXAMPLE ONLY ===")
-print("The values below are placeholders, not scores from evaluated model answers.")
-print("Do not interpret their averages as measured system quality.")
 display(HTML(df_triad.to_html(index=False, classes="table table-hover")))
 """
     t4_stdout = ""
@@ -440,7 +440,7 @@ Conflicts arise primarily from three distinct failure modes:
 2. **Methodological Discrepancies**: In quantum hardware, reporting single-qubit isolated cavity coherence ($>300\\,\\mu\\text{s}$) versus operational multi-qubit processor coherence under cross-talk and readout lines ($120\\,\\mu\\text{s}$).
 3. **Temporal Asynchrony & Stale Benchmarks**: Outdated simulations or superseded preprints conflicting with recently verified experimental milestones.
 
-#### 2. Does self-correction justify its extra latency?
+#### 2. Would a future claim-level self-correction pass justify its extra latency?
 **Answer**:
 **Yes, unequivocally for academic and technical research.**
 The current runner does not have a labelled claim-level ground-truth set, so pre- and post-correction hallucination rates are **not measured**. It does demonstrate rule-based detection of selected unsupported phrases and records synthesized responses for later annotation. A measured reduction would require independent claim extraction, source-level evidence matching, and human or validated automated adjudication.
@@ -467,12 +467,12 @@ The current RAG Triad table contains illustrative rubric values, not evaluations
 **Lead Contributor**: Aditya Reddy (`2025ae05196@wilp.bits-pilani.ac.in`)
 
 ### 5.1 Objective & Theoretical Framework
-Task 5 investigates dataset curation for research tasks using **Self-Instruct**, executes an exact mathematical derivation and computation of the **Direct Preference Optimization (DPO)** loss function, and provides a comparative analysis of **Parameter-Efficient Fine-Tuning (PEFT)** and RLHF alignment methodologies.
+Task 5 investigates dataset curation for research tasks using **Self-Instruct**, works through an illustrative numerical calculation of the **Direct Preference Optimization (DPO)** loss function, and provides a comparative analysis of **Parameter-Efficient Fine-Tuning (PEFT)** and RLHF alignment methodologies.
 
 #### 1. Self-Instruct Data Generation Pipeline
 - **Seed Tasks**: 5 diverse human-authored technical research tasks covering Surface Codes, Memristor Plasticity, Fusion Plasma, Tensor Networks, and SNN Surrogate Gradients.
-- **Generation**: Automated synthetic instruction-input-output generation using the Groq LLM.
-- **Filtering**: Automated deduplication via Jaccard token similarity (threshold $< 0.70$) and length heuristics, retaining high-quality, non-redundant training pairs.
+- **Generation**: Groq-generated examples are supplemented with procedural fallback examples when model output is missing or invalid; each retained record includes a generation-source label.
+- **Filtering**: Heuristic deduplication via Jaccard token similarity and length checks. These filters do not establish factual accuracy or training quality.
 
 #### 2. Direct Preference Optimization (DPO) Formulation
 DPO implicitly optimizes a Bradley-Terry reward model directly over language model policy probabilities without needing an explicit reinforcement learning reward model or PPO value network:
@@ -490,9 +490,16 @@ with open("data/task5_dpo_calculation.json", encoding="utf-8") as f:
     dpo_res = json.load(f)
 
 df_peft = pd.read_json("data/task5_peft_comparison.json")
+df_self_instruct = pd.read_json("data/task5_self_instruct_dataset.json")
+print("=== SELF-INSTRUCT SAMPLE PROVENANCE (HEURISTIC FILTERING ONLY) ===")
+if "generation_source" in df_self_instruct.columns:
+    display(df_self_instruct["generation_source"].value_counts(dropna=False).rename_axis("generation_source").reset_index(name="retained_samples"))
+else:
+    print("Legacy dataset: generation provenance was not recorded.")
 
-# Display Exact Step-by-Step DPO Mathematical Computation
-print("=== EXACT STEP-BY-STEP DIRECT PREFERENCE OPTIMIZATION (DPO) LOSS CALCULATION ===")
+# Display an illustrative DPO arithmetic walkthrough (inputs are hand-set, not model log probabilities)
+print("=== ILLUSTRATIVE DPO LOSS CALCULATION (REPRESENTATIVE INPUTS; NO TRAINING) ===")
+print("Input basis:", dpo_res.get("input_basis", "legacy illustrative values"))
 dpo_step_table = pd.DataFrame([
     {"Step": "1. Prompt (x)", "Mathematical Term": "x", "Value": dpo_res["prompt"]},
     {"Step": "2. Preferred Response (y_w)", "Mathematical Term": "y_w", "Value": dpo_res["preferred_response_yw"]},
@@ -510,10 +517,10 @@ dpo_step_table = pd.DataFrame([
 display(HTML(dpo_step_table.to_html(index=False, classes="table table-bordered table-striped")))
 
 # Display PEFT Comparison Matrix
-print("=== PARAMETER-EFFICIENT FINE-TUNING (PEFT) COMPARATIVE MATRIX ===")
+print("=== QUALITATIVE PEFT COMPARISON (RESOURCE USE IS CONFIGURATION-DEPENDENT) ===")
 display(HTML(df_peft.to_html(index=False, classes="table table-hover")))
 """
-    t5_stdout = "=== EXACT STEP-BY-STEP DIRECT PREFERENCE OPTIMIZATION (DPO) LOSS CALCULATION ===\n=== PARAMETER-EFFICIENT FINE-TUNING (PEFT) COMPARATIVE MATRIX ===\n"
+    t5_stdout = "=== ILLUSTRATIVE DPO LOSS CALCULATION (REPRESENTATIVE INPUTS; NO TRAINING) ===\n=== PARAMETER-EFFICIENT FINE-TUNING (PEFT) COMPARATIVE MATRIX ===\n"
     t5_cell = create_code_cell_with_output(t5_code, t5_stdout)
     cells.append(t5_cell)
     
@@ -527,15 +534,15 @@ display(HTML(df_peft.to_html(index=False, classes="table table-hover")))
 
 #### 2. Why is DPO attractive compared with reward-model-based RLHF?
 **Answer**:
-- **Elimination of Multi-Model Instability**: Traditional RLHF (via PPO) requires maintaining **four distinct models in GPU VRAM simultaneously**: the Actor policy, Critic value model, Reference policy, and Reward model. Tuning the Critic value network is notoriously unstable, sensitive to hyperparameter choices, and prone to reward hacking.
-- **Closed-Form Analytic Solution**: DPO algebraically substitutes the ground-truth reward function with the closed-form log-ratio of policy to reference probabilities, converting complex reinforcement learning into standard binary cross-entropy loss.
-- **Resource Efficiency**: DPO eliminates the PPO rollout generation phase, cutting VRAM overhead by over 50% and doubling training throughput.
+- **Elimination of Multi-Model Instability**: A common PPO-based RLHF setup may maintain separate actor, critic/value, reference, and reward-model components; exact model sharing, memory use, and placement depend on the implementation. Tuning the Critic value network is notoriously unstable, sensitive to hyperparameter choices, and prone to reward hacking.
+- **Direct Preference Objective**: DPO derives an objective in terms of policy/reference log-probability ratios and preference pairs; the current notebook demonstrates the arithmetic only and does not train a policy.
+- **Resource Efficiency**: DPO avoids the separate reward-model training and PPO rollout/update workflow. Actual memory use and throughput depend on model size, sequence length, batch size, hardware, and implementation; no percentage saving was measured here.
 
 #### 3. Why is QLoRA resource-efficient?
 **Answer**:
-QLoRA (Quantized Low-Rank Adaptation) achieves extreme resource efficiency through three innovations:
-1. **4-Bit NormalFloat (NF4) Quantization**: Quantizes frozen base model parameters into an information-theoretically optimal distribution for zero-mean, unit-variance normally distributed weights, shrinking a 27B model's footprint from 54GB (FP16) to ~14GB.
-2. **Double Quantization (DQ)**: Quantizes the quantization constants themselves, saving an additional 0.37 bits per parameter (~3GB across large models).
+QLoRA (Quantized Low-Rank Adaptation) can reduce the memory needed for the frozen base weights through quantization. Actual peak memory depends on model architecture, quantization metadata, activations, optimizer state, batch size, sequence length, and runtime:
+1. **4-Bit NormalFloat (NF4) Quantization**: Quantizes frozen base model parameters into an information-theoretically optimal distribution for zero-mean, unit-variance normally distributed weights, reducing frozen base-weight storage substantially relative to FP16; actual memory includes quantization metadata, activations, and runtime overhead.
+2. **Double Quantization (DQ)**: Quantizes quantization constants; the realized saving depends on model size and implementation.
 3. **Paged Optimizers**: Leverages CUDA unified memory paging to gracefully manage memory spikes during backward passes without out-of-memory (OOM) crashes.
 
 #### 4. PPO vs. GRPO & Advanced Alignment Frameworks
@@ -544,7 +551,7 @@ QLoRA (Quantized Low-Rank Adaptation) achieves extreme resource efficiency throu
 - **Process Reward Models (PRMs)**: Rather than scoring only the final output (Outcome Reward Model - ORM), PRMs assign credit to every individual step in a Chain-of-Thought reasoning path, dramatically improving multi-hop logical soundness.
 
 ### 5.3 Limitations Observed & Possible Improvements
-- **Limitations**: The DPO demonstration utilizes a representative scalar calculation for a single prompt-response pair.
+- **Limitations**: The DPO demonstration uses hand-set representative log probabilities for one prompt-response pair; no model likelihoods, gradient updates, or fine-tuning were performed.
 - **Improvements**: Implement a full PyTorch training loop fine-tuning a small adapter (e.g., LoRA on Qwen-0.5B) over the curated 30-sample Self-Instruct dataset using TRL's `DPOTrainer`.
 """
     cells.append(nbf.v4.new_markdown_cell(task5_analysis_md))
@@ -557,7 +564,7 @@ QLoRA (Quantized Low-Rank Adaptation) achieves extreme resource efficiency throu
 **Lead Contributor**: Pankaj Kumar (`2025ae05013@wilp.bits-pilani.ac.in`)
 
 ### 6.1 Objective & Experimental Design
-Task 6 systematically differentiates the three primary LLM architectures—**In-Context Prompting, Retrieval-Augmented Generation (RAG), and Fine-Tuning**—across six operational dimensions, implements a production decision framework, and evaluates multi-turn conversational context retention.
+Task 6 demonstrates three API prompt configurations—**Zero-Shot Prompting, Fixed-Context Demonstration, and Prompt-Based Specialization**—and a four-turn dialogue. It does not implement question-specific RAG or actual fine-tuning, and it does not independently score dialogue context retention.
 
 #### 6 Evaluation Criteria:
 1. **Knowledge Freshness**: Ability to incorporate rapidly evolving real-time research.
@@ -580,23 +587,26 @@ The runner stores placeholder CRS and FA values for demonstration, explicitly ma
     t6_code = """# Load and display Task 6 Paradigm Differentiation & Multi-Turn Results
 df_task6 = pd.read_json("data/task6_results.json")
 df_dialogue = pd.read_json("data/task6_multiturn_dialogue.json")
-# Tabular Display of Empirical Benchmark across 5 Questions
-print("=== TASK 6 API LATENCY COMPARISON ===")
+# Tabular Display of Demonstration-Condition API Calls across 5 Questions
+print("=== TASK 6 DEMONSTRATION-CONDITION API TIMING (SUCCESSFUL REQUESTS ONLY) ===")
+print("API request time excludes retry waits; failed calls have null request latency and are excluded from means.")
 display_cols_t6 = [
-    "question_id",
-    "category",
-    "prompting_latency_sec",
-    "rag_latency_sec",
-    "ft_latency_sec",
+    "question_id", "category",
+    "prompting_status", "prompting_latency_sec", "prompting_retry_wait_sec", "prompting_elapsed_sec",
+    "rag_status", "rag_latency_sec", "rag_retry_wait_sec", "rag_elapsed_sec",
+    "ft_status", "ft_latency_sec", "ft_retry_wait_sec", "ft_elapsed_sec",
 ]
 display(HTML(df_task6[display_cols_t6].to_html(index=False, classes="table table-bordered")))
 print("Metric basis:", ", ".join(sorted(df_task6["quality_and_hallucination_basis"].dropna().unique())))
 print("Fine-tuning basis:", ", ".join(sorted(df_task6["fine_tuning_condition"].dropna().unique())))
 print("RAG basis:", ", ".join(sorted(df_task6["rag_context_basis"].dropna().unique())))
+for arm, status_col, latency_col in [("Prompting", "prompting_status", "prompting_latency_sec"), ("Fixed-context", "rag_status", "rag_latency_sec"), ("Prompt-specialization", "ft_status", "ft_latency_sec")]:
+    ok = df_task6[df_task6[status_col] == "success"][latency_col].dropna()
+    print(f"{arm}: {len(ok)} successful calls; mean successful request latency=" + (f"{ok.mean():.3f}s" if len(ok) else "NOT EVALUATED"))
 
 # Tabular Display of 4-Turn Coherent Research Dialogue
 print("=== 4-TURN COHERENT MULTI-TURN RESEARCH CONVERSATION ===")
-display_cols_dial = ["turn_number", "dialogue_type", "user_inquiry", "agent_response", "context_retention_score", "follow_up_accuracy", "latency_sec"]
+display_cols_dial = ["turn_number", "dialogue_type", "user_inquiry", "request_status", "agent_response", "context_retention_score", "follow_up_accuracy", "request_latency_sec", "retry_wait_sec", "elapsed_latency_sec", "error"]
 display(HTML(df_dialogue[display_cols_dial].to_html(index=False, classes="table table-striped")))
 print("=== MULTI-TURN DIALOGUE: QUALITATIVE DEMONSTRATION ===")
 
@@ -618,20 +628,20 @@ else:
     print("FA: NOT EVALUATED — no validated scores available.")
 """
     t6_stdout = ""
-    t6_cell = create_code_cell_with_output(t6_code, t6_stdout, image_paths=["figures/task6_paradigm.png"])
+    t6_cell = create_code_cell_with_output(t6_code, t6_stdout, image_paths=["figures/task6_latency.png", "figures/task6_cost.png"])
     cells.append(t6_cell)
     
     task6_analysis_md = """### 6.2 Inference & Analysis Questions Answered
 
-**Evaluation caveat:** Task 6 quality and hallucination values are illustrative placeholders, not scores derived from the generated answers. The “fine-tuning” arm is a prompt-based specialization simulation, not an actual trained model. The RAG arm uses fixed demonstration snippets rather than question-specific retrieval. Latency and token cost are measured API-call properties; the quality comparison is not an empirical model comparison.
+**Evaluation caveat:** Task 6 quality and hallucination values are not evaluated. The “fine-tuning” arm is a prompt-based specialization simulation, not an actual trained model. The fixed-context arm uses the same demonstration snippets rather than question-specific retrieval. Request latency is calculated from successful API request attempts and excludes retry waiting; failed calls are reported by status and excluded from latency means. These are demonstration-path timing observations, not an empirical quality comparison of prompting, RAG, and fine-tuning.
 
 #### 1. When is RAG preferable to fine-tuning?
 **Answer**:
-RAG is strictly superior when:
-1. **Dynamic & Rapidly Changing Knowledge**: In bleeding-edge domains (quantum computing, fusion energy), empirical benchmarks update weekly. RAG incorporates new arXiv papers instantly via index ingestion without expensive retraining cycles.
-2. **Auditability & Legal Provenance**: Research assistants require strict citation anchoring (`[Source: DOI]`). Fine-tuned models encode knowledge implicitly in millions of weights, making claim attribution unverifiable.
+RAG can be a suitable design choice when:
+1. **Dynamic & Rapidly Changing Knowledge**: A properly implemented and refreshed retrieval index can expose newly ingested documents without changing model weights. This assignment's fixed-snippet demonstration does not test that capability.
+2. **Auditability & Provenance**: Retrieval can make source documents available for attribution, provided citations are validated against retrieved passages. Fine-tuning alone does not supply that source traceability.
 3. **Zero Retraining Budget**: RAG requires no GPU cluster training runs, eliminating catastrophic forgetting risks.
-*Fine-tuning is preferred only when modifying output syntax, persona, specialized reasoning formats, or teaching domain-specific jargon that cannot fit in context windows.*
+*Fine-tuning may be considered for stable behavior, format, or task adaptation when supported by suitable training data and evaluation. No fine-tuning was performed in this assignment.*
 
 #### 2. What information should persist across turns?
 **Answer**:
@@ -657,11 +667,11 @@ Prompting, RAG and fine-tuning have different operational trade-offs. The curren
     # TASK 7
     # -------------------------------------------------------------------------
     task7_md = """---
-## Task 7: Full Research Assistant Integration, Evaluation & Cost Recommendation (2.0 Marks)
+## Task 7: Research Assistant Prototype Integration, Execution Audit & Cost Recommendation (2.0 Marks)
 **Lead Contributor**: Shradha Katakdhond (`2025ae05331@wilp.bits-pilani.ac.in`)
 
 ### 7.1 Objective & System Integration Architecture
-Task 7 synthesizes all specialized modules developed in Tasks 1–6 into a unified, production-ready `ResearchAssistant` class, performs an end-to-end evaluation across **10 held-out questions**, executes root-cause failure analysis, provides a structured JSON audit trail with claim-to-source traceability, and formulates evidence-based production and cost recommendations.
+Task 7 integrates the modules developed in Tasks 1–6 into a research-assistant prototype, exercises the pipeline across **10 held-out questions**, records execution-stage outcomes and a structured JSON audit trail, and formulates prototype-level production and cost recommendations. The current run does not independently validate factual quality, citation correctness, hallucination rate, or confidence calibration; these remain explicitly not evaluated.
 
 ```mermaid
 flowchart TD
@@ -669,17 +679,17 @@ flowchart TD
     Decomp --> MemSync["3. Memory Integration (Working Deque + Episodic Reflection)"]
     MemSync --> Tools["4. Parallel Multi-Source Engine (Academic, Wikipedia, News, Credibility)"]
     Tools --> Synth["5. Synthesis & Conflict Resolver (Credibility-Weighted)"]
-    Synth --> Verifier["6. Hallucination Verifier & Self-Correction Pass"]
-    Verifier --> Audit["7. Structured JSON Audit Trail & Production Brief"]
+    Synth --> Audit["6. Candidate Claim Audit + Source IDs (not entailment verification)"]
+    Audit --> Output["7. Research Brief + Execution JSON Audit (quality unvalidated)"]
 ```
 
 #### Key Architecture Components Integrated:
 1. **Query Router & Decomposer**: Automatically deconstructs multi-hop inquiries into 2–4 targeted sub-queries using CoT.
 2. **Agentic Memory Sync**: Pulls historical lessons from 20 episodic sessions and updates bounded working memory ($N=10$).
 3. **Parallel Multi-Source Retrieval Engine**: Concurrently queries academic, encyclopedic, and news tools with strict schema validation.
-4. **Credibility-Weighted Conflict Resolver**: Resolves source contradictions by prioritizing peer-reviewed literature.
-5. **Hallucination Verifier & Calibrator**: Deconstructs synthesis into atomic claims, verifies premises, and computes confidence.
-6. **JSON Audit Trail Logger**: Emits end-to-end execution records with full claim-to-source traceability.
+4. **Synthesis**: Produces a response using retrieved mock-repository evidence; the integrated pipeline does not invoke Task 4's conflict-resolution benchmark.
+5. **Claim Audit Placeholder**: Extracts candidate sentences and records candidate source IDs; it does not establish entailment, factual correctness, or confidence calibration.
+6. **JSON Audit Trail Logger**: Records execution stages and candidate claim-to-source links; candidate links are not proof of entailment.
 """
     cells.append(nbf.v4.new_markdown_cell(task7_md))
     t7_code = """# Load and display Task 7 Full Integration, Evaluation & Cost Results
@@ -688,25 +698,31 @@ with open("data/task7_sample_audit_trail.json", encoding="utf-8") as f:
     sample_audit = json.load(f)
 # Tabular Display of 10 Held-Out Evaluation Questions
 print("=== TASK 7 END-TO-END EVALUATION RESULTS (10 HELD-OUT QUESTIONS) ===")
-display_cols_t7 = ["evaluation_id", "category", "question", "sub_queries", "synthesis_quality", "citation_accuracy_pct", "hallucination_rate_pct", "task_completion", "mean_confidence", "latency_sec", "cost_usd"]
+display_cols_t7 = ["evaluation_id", "category", "question", "sub_queries", "llm_synthesis_request_status", "decomposition_status", "retrieval_stage_status", "retrieval_success_count", "retrieval_total_count", "task_completion", "quality_evaluation_status", "synthesis_quality", "citation_accuracy_pct", "hallucination_rate_pct", "mean_confidence", "latency_sec", "cost_usd"]
 display(HTML(df_task7[display_cols_t7].to_html(index=False, classes="table table-bordered table-striped")))
 
 # Aggregate System Performance Metrics
 print("\\n=== AGGREGATE SYSTEM PERFORMANCE METRICS ===")
+def metric_or_not_evaluated(series, formatter):
+    values = pd.to_numeric(series, errors="coerce").dropna()
+    return formatter(values.mean()) if len(values) else "NOT EVALUATED"
+
+llm_success_rate = (df_task7["llm_synthesis_request_status"] == "success").mean() * 100
+pipeline_stage_rate = (df_task7["task_completion"] == "execution_stages_completed_quality_unvalidated").mean() * 100
 agg_metrics = pd.DataFrame([{
-    "Mean Synthesis Quality": f"{df_task7['synthesis_quality'].mean():.2f} / 5.0",
-    "Mean Citation Accuracy": f"{df_task7['citation_accuracy_pct'].mean():.1f}%",
-    "Mean Hallucination Rate": f"{df_task7['hallucination_rate_pct'].mean():.1f}%",
-    "Task Completion Rate": (
-        f"{(df_task7['task_completion'].astype(str).str.lower().isin(['completed', 'complete', 'success', 'true']).mean() * 100):.1f}%"
-    ),
-    "Mean Latency per Query": f"{df_task7['latency_sec'].mean():.2f} seconds",
-    "Mean Cost per Query": f"${df_task7['cost_usd'].mean():.6f} USD"
+    "Mean Synthesis Quality": metric_or_not_evaluated(df_task7["synthesis_quality"], lambda x: f"{x:.2f} / 5.0"),
+    "Mean Citation Accuracy": metric_or_not_evaluated(df_task7["citation_accuracy_pct"], lambda x: f"{x:.1f}%"),
+    "Mean Hallucination Rate": metric_or_not_evaluated(df_task7["hallucination_rate_pct"], lambda x: f"{x:.1f}%"),
+    "LLM Synthesis Request Success Rate": f"{llm_success_rate:.1f}%",
+    "Pipeline Execution-Stage Completion Rate (not quality validation)": f"{pipeline_stage_rate:.1f}%",
+    "Mean Confidence": metric_or_not_evaluated(df_task7["mean_confidence"], lambda x: f"{x:.3f}"),
+    "Mean Elapsed Time per Query": f"{df_task7['latency_sec'].mean():.2f} seconds",
+    "Mean Estimated Cost per Query": f"${df_task7['cost_usd'].mean():.6f} USD"
 }])
 display(HTML(agg_metrics.to_html(index=False, classes="table table-success")))
 
 # Display Structured JSON Audit Trail Snippet
-print("\\n=== STRUCTURED JSON AUDIT TRAIL & CLAIM-TO-SOURCE TRACEABILITY (SAMPLE: EVAL_05) ===")
+print("\\n=== STRUCTURED JSON AUDIT TRAIL & CANDIDATE SOURCE ATTRIBUTION (NOT VERIFIED) (SAMPLE: EVAL_05) ===")
 audit_summary = {
     "Query": sample_audit["query"],
     "Episodic Reflection Injected": sample_audit["episodic_reflection"],
@@ -716,26 +732,26 @@ audit_summary = {
     "Atomic Claims Extracted": sample_audit["atomic_claims_count"],
     "Verified Claims": sample_audit["verified_claims_count"],
     "Mean Calibrated Confidence": sample_audit["mean_confidence"],
-    "Claim-to-Source Traceability": sample_audit["claim_to_source_traceability"]
+    "Candidate Claim-to-Source Attribution (NOT VERIFIED)": sample_audit["claim_to_source_traceability"]
 }
 display(HTML(pd.DataFrame([audit_summary]).to_html(index=False, classes="table table-info")))
 """
-    t7_stdout = "=== TASK 7 END-TO-END EVALUATION RESULTS (10 HELD-OUT QUESTIONS) ===\n=== AGGREGATE SYSTEM PERFORMANCE METRICS ===\n=== STRUCTURED JSON AUDIT TRAIL & CLAIM-TO-SOURCE TRACEABILITY (SAMPLE: EVAL_05) ===\n"
+    t7_stdout = "=== TASK 7 END-TO-END EVALUATION RESULTS (10 HELD-OUT QUESTIONS) ===\n=== AGGREGATE SYSTEM PERFORMANCE METRICS ===\n=== STRUCTURED JSON AUDIT TRAIL & CANDIDATE SOURCE ATTRIBUTION (NOT VERIFIED) (SAMPLE: EVAL_05) ===\n"
     t7_cell = create_code_cell_with_output(t7_code, t7_stdout, image_paths=["figures/task7_architecture.png"])
     cells.append(t7_cell)
     
-    task7_analysis_md = """### 7.2 Root-Cause Failure Case Analysis (2 Failure Modes)
+    task7_analysis_md = """### 7.2 Design-Level Failure Modes and Mitigations (2 Cases)
 
 #### Failure Case 1: Over-Decomposition Latency on Simple Inquiries
-- **Observation**: When evaluating simple factual queries (e.g. `EVAL_01`: *"What is the physical threshold temperature for niobium superconducting RF cavities?"*), the query decomposer generated three separate sub-queries, triggering multiple parallel tool invocations and verification checks.
-- **Root Cause**: Rigid routing logic that treated all queries through the complex multi-hop pipeline regardless of input semantic entropy.
-- **Impact**: Incurred ~40s latency and $\\approx \\$0.00017$ cost for an answer that simple Zero-Shot could resolve in 2 seconds for $\\approx \\$0.00005$.
+- **Design risk**: A simple factual query may be decomposed into multiple sub-queries and sent through the same retrieval/synthesis path as a complex query.
+- **Root Cause**: The current pipeline does not yet use a validated complexity router to select a lighter path.
+- **Impact**: This is a design-level risk; no controlled simple-versus-complex routing latency experiment was run.
 - **Mitigation**: Implement an **Adaptive Complexity Router (Tiered Classifier)**. Queries with high factual specificity and low relational complexity bypass decomposition and execute direct single-turn retrieval.
 
 #### Failure Case 2: Epistemic Indeterminacy in Ambiguous Scientific Debates
-- **Observation**: On ambiguous queries (e.g. `EVAL_09`: Low-energy nuclear reactions / cold fusion), the agent experienced high self-correction iterations when conflicting sources claimed conflicting calorimetric peaks.
-- **Root Cause**: The conflict resolver initially attempted to enforce a single consensus answer on an unresolved scientific controversy.
-- **Impact**: Increased self-correction latency and minor confidence score reduction.
+- **Design risk**: An ambiguous scientific question may have credible sources that disagree or insufficient evidence for a single conclusion.
+- **Root Cause**: A rule-based selector can overstate certainty if it is forced to choose one winning source.
+- **Impact**: No self-correction pass is implemented in the current runner; its latency and effect on confidence cannot be measured.
 - **Mitigation**: Implement an **Epistemic Equivalence Fork**. When credible sources actively disagree without peer-reviewed resolution, the agent is instructed to present a **bifurcated dialectical synthesis** outlining the conflicting empirical arguments, respective methodologies, and unresolved evidentiary gaps rather than forcing an artificial consensus.
 
 ---
@@ -748,25 +764,25 @@ display(HTML(pd.DataFrame([audit_summary]).to_html(index=False, classes="table t
 
 | Component | Selected Approach | Rationale | Cost & Performance Impact |
 |---|---|---|---|
-| **Reasoning Strategy** | Hybrid CoT + Adaptive Routing | CoT is a candidate strategy; compare its lexical-coverage proxy and measured latency against ToT before selecting it. | Reduces average query latency by 35% compared to full ToT. |
-| **Tool Execution** | ThreadPool Parallel Calling | Concurrently queries Academic, Wikipedia, and News sources. | Cuts tool retrieval latency by 45–58% ($\\\\Delta t \\approx 10\\text{s}$). |
-| **Memory System** | Bounded Working Deque + Episodic Reflection | Bounded deque ($N=10$) + rolling summary keeps operational context compact; episodic reflections guide research strategy. | Keeps memory token overhead under 15% of context budget. |
-| **Verification & Alignment**| Credibility-Weighted Scoring + Claim Verification | Weights peer-reviewed journals at 98% and filters blog claims; two-pass atomic claim self-correction. | Hallucination reduction and citation precision were not measured; claim-level annotation is required. |
-| **Model Selection** | Tiered Model Routing (`qwen/qwen3.8-27b`) | Balances high analytical reasoning capability with fast inference on Groq hardware. | Enables production serving at $\\approx \\$0.00017$ per query. |
+| **Reasoning Strategy** | Hybrid CoT + Adaptive Routing | CoT is a candidate strategy; compare its lexical-coverage proxy and measured latency against ToT before selecting it. | No validated latency reduction was established in the available run. |
+| **Tool Execution** | ThreadPool Parallel Calling | Concurrently queries Academic, Wikipedia, and News sources. | The local benchmark uses simulated tool delays; live retrieval latency savings were not measured. |
+| **Memory System** | Bounded Working Deque + Episodic Reflection | Bounded deque ($N=10$) + rolling summary keeps operational context compact; episodic reflections guide research strategy. | Memory token overhead was not measured in a validated production workload. |
+| **Verification & Alignment**| Rule-Based Source Selection | Selects the highest configured credibility value; no claim-level entailment or correction pass is implemented. | Hallucination reduction and citation precision are not evaluated. |
+| **Model Selection** | Tiered Model Routing (`qwen/qwen3.8-27b`) | Balances analytical capability with inference availability on Groq. | Observed API cost depends on actual token usage and provider pricing; no production cost guarantee is claimed. |
 
 #### Cost Engineering Analysis
-- **Current Cost per Query**: **$\\approx \\$0.000175 USD** (based on ~350 prompt tokens and ~500 output tokens at $0.20 per 1M tokens).
-- **Cost per 1,000 Production Queries**: **$\\approx \\$0.175 USD** (Extremely cost-effective).
+- **Cost per Query**: Calculate from recorded prompt/completion token usage and configured price constants; this is a prototype estimate, not a production quote.
+- **Cost per 1,000 Queries**: Multiply measured per-query cost by 1,000 after a successful representative run.
 
 #### Two Concrete Cost-Reduction Strategies:
 1. **Tiered Model Cascading (Hierarchical Routing)**:
    - Use an ultra-lightweight, low-cost model (e.g., Llama-3.1-8B-Instant at $0.05/1M tokens) for initial intent classification, query decomposition, and safety filtering.
    - Route to the frontier reasoning model (`qwen/qwen3.8-27b`) only for multi-source synthesis and conflict resolution.
-   - *Estimated Cost Savings: 42% reduction per query.*
+   - *Potential savings must be measured against a representative workload before being reported.*
 2. **Semantic Vector Response Caching**:
    - Cache synthesized research briefs and verified claim-to-source mappings in a vector store (e.g., Qdrant / Redis).
    - For incoming queries with cosine similarity $>0.94$ against cached inquiries, serve the cached verified brief instantly with local timestamping.
-   - *Estimated Cost Savings: 60–75% reduction on recurring domain queries with near-zero latency (<50ms).*
+   - *Cache hit rate, latency, and cost savings were not benchmarked in this assignment.*
 
 ---
 
@@ -774,11 +790,11 @@ display(HTML(pd.DataFrame([audit_summary]).to_html(index=False, classes="table t
 
 #### 1. What is the most critical component for synthesis quality?
 **Answer**:
-The **Credibility-Weighted Verification & Grounding Engine** is the single most critical component. Without it, even the most capable reasoning models ingest erroneous or sensationalized claims from low-tier web sources and generate fluent, convincing hallucinations. Anchoring claims to peer-reviewed evidence and weighting by authority tier guarantees factual integrity.
+A **Credibility-Weighted Evidence and Audit Layer** is an important design component. Traceable sources and explicit evidence-quality heuristics can improve auditability, but the current prototype does not independently verify each claim and therefore cannot guarantee factual integrity or quantify hallucination reduction.
 
 #### 2. What would you fix first before production?
 **Answer**:
-Deploy the **Adaptive Complexity Router**. In production workloads, 60–70% of user queries are simple factual or definitional questions. Forcing every query through multi-source decomposition, episodic matching, and two-pass verification introduces unnecessary latency and costs. An adaptive router immediately optimizes user experience for simple queries while reserving full agentic rigor for complex research.
+Prototype an **Adaptive Complexity Router** and evaluate it against the current fixed pipeline on a labelled workload. Its latency, cost, and quality benefits have not been measured in this assignment.
 
 #### 3. Which optimization gives the best quality–cost trade-off?
 **Answer**:
@@ -839,10 +855,10 @@ This project successfully designed, implemented, evaluated, and documented an **
 
 ### Key Empirical Observations:
 1. **Reasoning Strategies**: Simple queries require only Zero-Shot prompting; complex multi-hop inquiries demand structured Chain-of-Thought (CoT) or Tree-of-Thought (ToT) reasoning to avoid qualitative oversimplification.
-2. **Safe Function Calling**: Building a native ReAct loop with Pydantic input validation, iteration caps, and repetition hashing provides robust security against prompt injection and data exfiltration, while parallel execution yields a **45–58% latency reduction**.
-3. **Agentic Memory**: Bounded working memory ($N=10$) coupled with high-level episodic reflections enhances contextual grounding (+15.4% quality improvement) without token bloat.
+2. **Safe Function Calling**: Building a native ReAct loop with Pydantic input validation, iteration caps, and repetition hashing provides robust security against prompt injection and data exfiltration, while the local mock-tool benchmark showed approximately 59–60% lower elapsed time for the tested simulated calls; this is not a live retrieval benchmark.
+3. **Agentic Memory**: Bounded working memory ($N=10$) coupled with high-level episodic reflections is an architectural approach; a quality improvement and token-overhead reduction were not established by the available run.
 4. **Synthesis & Calibration**: The project demonstrates credibility-weighted rule-based conflict handling. Hallucination reduction and model calibration were not empirically measured; the calibration plot uses synthetic samples.
-5. **Alignment & Paradigms**: DPO provides an elegant, stable mathematical alternative to PPO for aligning reasoning behavior, while RAG remains the optimal paradigm for dynamically evolving research literature.
+5. **Alignment & Paradigms**: DPO provides an elegant, stable mathematical alternative to PPO for aligning reasoning behavior, while RAG is a useful candidate for dynamically evolving research literature; this assignment did not establish a universally optimal paradigm.
 
 ---
 ## Academic & Technical References
@@ -909,7 +925,7 @@ for limitation in reproducibility["evaluation_limitations"]:
         "data/task2_security_result.json",
         "data/task3_results.json", "data/task4_results.json",
         "data/task4_rag_triad.json", "data/task5_peft_comparison.json",
-        "data/task5_dpo_calculation.json", "data/task6_results.json",
+        "data/task5_dpo_calculation.json", "data/task5_self_instruct_dataset.json", "data/task6_results.json",
         "data/task6_multiturn_dialogue.json",
         "data/task7_evaluation_results.json",
         "data/task7_sample_audit_trail.json",
@@ -922,6 +938,35 @@ for limitation in reproducibility["evaluation_limitations"]:
             + "\\n- ".join(missing_data)
             + "\\nRun run_experiments.py first from the project root."
         )
+
+    # Validate that all artifacts belong to one complete, successful runner execution.
+    summary_path = Path("data/execution_summary.json")
+    if not summary_path.is_file():
+        raise RuntimeError("data/execution_summary.json is missing. Run the patched experiment runner first.")
+    with summary_path.open(encoding="utf-8") as f:
+        execution_summary = json.load(f)
+    expected_tasks = {f"Task {i}" for i in range(1, 8)}
+    completed_tasks = set(execution_summary.get("completed_tasks", []))
+    failed_tasks = execution_summary.get("failed_tasks", [])
+    if completed_tasks != expected_tasks or failed_tasks:
+        raise RuntimeError(
+            "Notebook generation blocked: Tasks 1-7 must all complete with no failures. "
+            f"Completed={sorted(completed_tasks)}; failed={failed_tasks}"
+        )
+    hashes = execution_summary.get("artifact_sha256", {})
+    required_json = [p for p in required_data if p.endswith(".json")]
+    missing_hashes = [Path(p).name for p in required_json if Path(p).name not in hashes]
+    if missing_hashes:
+        raise RuntimeError(
+            f"Execution summary lacks same-run hashes for {missing_hashes}. Re-run the patched runner."
+        )
+    for relative_path in required_json:
+        artifact = Path(relative_path)
+        digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
+        if digest != hashes[artifact.name]:
+            raise RuntimeError(
+                f"Stale/mixed-run artifact detected: {relative_path}. Re-run all seven tasks."
+            )
 
     # Save the notebook structure first, so it remains available if execution fails.
     with open(output_nb_path, "w", encoding="utf-8") as f:

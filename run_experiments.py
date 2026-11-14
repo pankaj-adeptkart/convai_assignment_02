@@ -8,24 +8,10 @@ import os
 import sys
 
 from pathlib import Path
-
-
-PROJECT_ROOT = Path(__file__).resolve().parent
-DATA_DIR = PROJECT_ROOT / "data"
-FIGURES_DIR = PROJECT_ROOT / "figures"
-
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-FIGURES_DIR.mkdir(parents=True, exist_ok=True)
-
-# Ensure local fast matplotlib cache and unbuffered logging
-MPLCONFIG_DIR = PROJECT_ROOT / ".mplconfig"
-MPLCONFIG_DIR.mkdir(parents=True, exist_ok=True)
-os.environ["MPLCONFIGDIR"] = str(MPLCONFIG_DIR)
-if hasattr(sys.stdout, 'reconfigure'):
-    sys.stdout.reconfigure(line_buffering=True)
-
 import time
 import json
+import hashlib
+import uuid
 import math
 import random
 import re
@@ -40,10 +26,26 @@ import seaborn as sns
 from dotenv import load_dotenv
 from groq import Groq
 from collections import deque
+import research_pipeline_utils as dataset_fixes
+
+## Validate assignment claims and code/report consistency before running experiments.
+PROJECT_ROOT = Path(__file__).resolve().parent
+DATA_DIR = PROJECT_ROOT / "data"
+FIGURES_DIR = PROJECT_ROOT / "figures"
+
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+
+# Ensure local fast matplotlib cache and unbuffered logging
+MPLCONFIG_DIR = PROJECT_ROOT / ".mplconfig"
+MPLCONFIG_DIR.mkdir(parents=True, exist_ok=True)
+os.environ["MPLCONFIGDIR"] = str(MPLCONFIG_DIR)
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(line_buffering=True)
 
 # Configure styling for high-quality plots
 plt.style.use('seaborn-v0_8-whitegrid' if 'seaborn-v0_8-whitegrid' in plt.style.available else 'default')
-plt.rcParams['font.sans-serif'] = 'Arial'
+plt.rcParams['font.sans-serif'] = ['DejaVu Sans']
 plt.rcParams['axes.edgecolor'] = '#cccccc'
 plt.rcParams['axes.linewidth'] = 0.8
 plt.rcParams['figure.dpi'] = 300
@@ -62,6 +64,11 @@ if not GROQ_MODEL:
 
 client = Groq(api_key=GROQ_API_KEY, max_retries=0, timeout=20.0)
 
+print(f"[INIT] Groq Client initialized with model: {GROQ_MODEL} and API key configured: {client is not None}")
+
+API_DIAGNOSTIC_OK = False
+API_QUOTA_EXHAUSTED = False
+
 print("\n[API DIAGNOSTIC] Testing Groq connection...")
 
 try:
@@ -77,9 +84,11 @@ try:
         max_tokens=30
     )
 
+    API_DIAGNOSTIC_OK = True
     print("[API DIAGNOSTIC] SUCCESS")
     print("Model:", GROQ_MODEL)
-    print("Response:", test_response.choices[0].message.content)
+    print("Response:", test_response.choices[0].message.content )
+    print("Input tokens:", test_response.usage.prompt_tokens)
 
 except Exception as exc:
     print("[API DIAGNOSTIC] FAILED")
@@ -94,6 +103,8 @@ except Exception as exc:
 
 random.seed(42)
 np.random.seed(42)
+RUN_ID = uuid.uuid4().hex
+RUN_STARTED_EPOCH = time.time()
 
 print(f"[INIT] Groq Client initialized with model: {GROQ_MODEL}")
 
@@ -141,7 +152,11 @@ def save_reproducibility_metadata():
             "Task 4 model calibration requires claim-level confidence and independent correctness annotations.",
             "Task 6 uses fixed RAG snippets and prompt-based specialization, not actual fine-tuning.",
             "Task 6 CRS and FA have not been human-evaluated.",
-            "Task 7 quality and hallucination metrics have not been independently evaluated."
+            "Task 2 timeout is a soft result-wait deadline; a running thread may continue.",
+            "Task 5 DPO uses hand-set illustrative log probabilities; no model likelihoods or training were run.",
+            "Task 5 Self-Instruct records identify Groq-generated versus procedural fallback examples; filters are heuristic only.",
+            "Task 7 pipeline execution status is not factual-quality validation; quality, citation accuracy, hallucination rate, and confidence are not independently evaluated.",
+            "Task 6 latency uses successful API request time excluding retry waits; failures are not averaged."
         ]
     }
 
@@ -199,67 +214,101 @@ def call_groq_llm(
     prompt: str,
     system_prompt: str = "You are an expert AI research assistant. Provide rigorous, objective, and deeply analyzed research findings.",
     temperature: float = 0.2,
-    max_tokens: int = 1024,
+    max_tokens: int = 400,
     retries: int = 3
 ) -> Dict[str, Any]:
-    """Helper function to call Groq API with robust timing and token tracking."""
+    """Call Groq with quota-aware retry handling and explicit failure states."""
+    global API_QUOTA_EXHAUSTED
+    if API_QUOTA_EXHAUSTED:
+        return {"content": "", "input_tokens": 0, "output_tokens": 0,
+                "latency": 0.0, "cost": 0.0, "status": "quota_exhausted",
+                "error": "Daily token quota was exhausted earlier in this run."}
+
     messages = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
     total_start = time.perf_counter()
-    for attempt in range(retries):
+    request_latency_sec = 0.0
+    retry_wait_sec = 0.0
+
+    for attempt in range(max(1, retries)):
+        attempt_start = time.perf_counter()
         try:
             resp = client.chat.completions.create(
-                model=GROQ_MODEL,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens
+                model=GROQ_MODEL, messages=messages,
+                temperature=temperature, max_tokens=max_tokens
             )
-            latency = time.perf_counter() - total_start
+            request_latency_sec += time.perf_counter() - attempt_start
+            elapsed_latency_sec = time.perf_counter() - total_start
             usage = resp.usage
             response_text = resp.choices[0].message.content or ""
+            input_tokens = (int(usage.prompt_tokens) if usage is not None and usage.prompt_tokens is not None
+                            else int(len(prompt.split()) * 1.3))
+            output_tokens = (int(usage.completion_tokens) if usage is not None and usage.completion_tokens is not None
+                             else int(len(response_text.split()) * 1.3))
+            cost = input_tokens * PRICE_PER_INPUT_TOKEN + output_tokens * PRICE_PER_OUTPUT_TOKEN
+            return {"content": response_text.strip(), "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "latency": round(elapsed_latency_sec, 3),
+                    "request_latency_sec": round(request_latency_sec, 3),
+                    "retry_wait_sec": round(retry_wait_sec, 3),
+                    "elapsed_latency_sec": round(elapsed_latency_sec, 3),
+                    "cost": round(cost, 6), "status": "success"}
+        except Exception as exc:
+            request_latency_sec += time.perf_counter() - attempt_start
+            error_text = str(exc)
+            lower = error_text.lower()
+            status_code = getattr(exc, "status_code", None)
+            is_429 = status_code == 429 or "error code: 429" in lower or "rate_limit_exceeded" in lower
+            if is_429:
+                # TPD is a daily quota: do not repeatedly retry it or continue other tasks.
+                if "tpd" in lower or "tokens per day" in lower:
+                    API_QUOTA_EXHAUSTED = True
+                    failure_status = "quota_exhausted"
+                    print("[QUOTA STOP] Groq daily token quota exhausted; stopping further API calls.")
+                    return {"content": "", "input_tokens": 0, "output_tokens": 0,
+                            "latency": round(time.perf_counter() - total_start, 3),
+                            "request_latency_sec": round(request_latency_sec, 3),
+                            "retry_wait_sec": round(retry_wait_sec, 3),
+                            "elapsed_latency_sec": round(time.perf_counter() - total_start, 3),
+                            "cost": 0.0, "status": failure_status, "error": error_text}
+                # OTPM/TPM limits are temporary. Respect provider's stated retry interval.
+                match = re.search(r"try again in ([0-9.]+)s", lower)
+                wait_seconds = float(match.group(1)) + 1.0 if match else min(20.0 * (attempt + 1), 60.0)
+                if attempt < retries - 1:
+                    wait_seconds = min(max(wait_seconds, 1.0), 90.0)
+                    print(f"[RATE LIMIT] Waiting {wait_seconds:.1f}s before retry ({attempt + 1}/{retries - 1}).")
+                    time.sleep(wait_seconds)
+                    retry_wait_sec += wait_seconds
+                    continue
+                return {"content": "", "input_tokens": 0, "output_tokens": 0,
+                        "latency": round(time.perf_counter() - total_start, 3),
+                        "request_latency_sec": round(request_latency_sec, 3),
+                        "retry_wait_sec": round(retry_wait_sec, 3),
+                        "elapsed_latency_sec": round(time.perf_counter() - total_start, 3),
+                        "cost": 0.0, "status": "rate_limited", "error": error_text}
 
-            # Some provider responses may omit individual usage fields.
-            # Fall back to an estimated token count when a field is absent.
-            input_tokens = (
-                int(usage.prompt_tokens)
-                if usage is not None and usage.prompt_tokens is not None
-                else int(len(prompt.split()) * 1.3)
-            )
-            output_tokens = (
-                int(usage.completion_tokens)
-                if usage is not None and usage.completion_tokens is not None
-                else int(len(response_text.split()) * 1.3)
-            )
-            cost = (input_tokens * PRICE_PER_INPUT_TOKEN) + (output_tokens * PRICE_PER_OUTPUT_TOKEN)
-            
-            return {
-                "content": response_text.strip(),
-                "input_tokens": input_tokens,
-                "output_tokens": output_tokens,
-                "latency": round(latency, 3),
-                "cost": round(cost, 6),
-                "status": "success"
-            }
-        except Exception as e:
-            error_text = str(e).lower()
-            permanent_error = any(
-                marker in error_text
-                for marker in ("authentication", "invalid api key", "model_not_found",
-                               "permission denied", "unsupported model")
-            )
+            permanent_error = any(marker in lower for marker in (
+                "authentication", "invalid api key", "model_not_found",
+                "permission denied", "unsupported model"))
             if permanent_error or attempt == retries - 1:
-                return {
-                    "content": f"[Error: {str(e)}]",
-                    "input_tokens": 0,
-                    "output_tokens": 0,
-                    "latency":round(time.perf_counter() - total_start, 3),
-                    "cost": 0.0,
-                    "status": "failed",
-                    "error": str(e)
-                }
-            time.sleep(min(2 ** attempt, 8))
+                return {"content": "", "input_tokens": 0, "output_tokens": 0,
+                        "latency": round(time.perf_counter() - total_start, 3),
+                        "request_latency_sec": round(request_latency_sec, 3),
+                        "retry_wait_sec": round(retry_wait_sec, 3),
+                        "elapsed_latency_sec": round(time.perf_counter() - total_start, 3),
+                        "cost": 0.0, "status": "failed", "error": error_text}
+            wait_seconds = min(2 ** attempt, 8)
+            time.sleep(wait_seconds)
+            retry_wait_sec += wait_seconds
+
+    return {"content": "", "input_tokens": 0, "output_tokens": 0,
+            "latency": round(time.perf_counter() - total_start, 3),
+            "request_latency_sec": round(request_latency_sec, 3),
+            "retry_wait_sec": round(retry_wait_sec, 3),
+            "elapsed_latency_sec": round(time.perf_counter() - total_start, 3),
+            "cost": 0.0, "status": "failed", "error": "Retry loop ended unexpectedly."}
 
 print("[INIT] Groq caller configured successfully.")
 
@@ -391,9 +440,30 @@ def run_task1():
     print("="*70)
     
     techniques = ["Zero-Shot", "Few-Shot", "Chain-of-Thought (CoT)", "Tree-of-Thought (ToT)", "Automatic Prompt Engineer (APE)"]
+    checkpoint_path = DATA_DIR / "task1_results.json"
     records = []
+    if checkpoint_path.exists():
+        try:
+            prior = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+            if isinstance(prior, list):
+                # Keep successful rows only; failed/rate-limited pairs are retried
+                # and replaced rather than duplicated in the evaluation table.
+                records = [row for row in prior if row.get("status") == "success"]
+                # Legacy checkpoints contain elapsed time only; do not silently
+                # present it as request-only latency.
+                for row in records:
+                    row.setdefault("request_latency_sec", None)
+                    row.setdefault("retry_wait_sec", None)
+                    row.setdefault("elapsed_sec", row.get("latency_sec"))
+                    row.setdefault("latency_basis", "legacy_elapsed_includes_retry_waits")
+            print(f"[CHECKPOINT] Loaded {len(records)} successful Task 1 records.")
+        except Exception as exc:
+            print(f"[CHECKPOINT] Could not read prior Task 1 checkpoint; starting fresh: {exc}")
+            records = []
+    completed_keys = {(r.get("question_id"), r.get("technique")) for r in records
+                      if r.get("status") == "success"}
     evaluator = ReasoningEvaluator()
-    
+
     for q_item in TASK1_QUESTIONS:
         qid = q_item["id"]
         cat = q_item["category"]
@@ -401,8 +471,14 @@ def run_task1():
         print(f"\nProcessing [{qid}] ({cat}): {q_text[:60]}...")
         
         for tech in techniques:
+            if (qid, tech) in completed_keys:
+                print(f"  -> {tech:30s} | CHECKPOINT: already successful; skipped")
+                continue
+            if API_QUOTA_EXHAUSTED:
+                print("[STOP] Daily quota exhausted; preserving checkpoint and ending Task 1.")
+                break
             prompt = build_prompt_technique(q_text, tech)
-            res = call_groq_llm(prompt, temperature=0.2, max_tokens=700)
+            res = call_groq_llm(prompt, temperature=0.2, max_tokens=350)
 
           #check weither API call failed or success, exit if failed
             if res["status"] != "success":
@@ -416,12 +492,19 @@ def run_task1():
                     "reasoning_depth": None,
                     "input_tokens": 0,
                     "output_tokens": 0,
-                    "latency_sec": res["latency"],
+                    "latency_sec": res.get("request_latency_sec", res["latency"]),
+                    "request_latency_sec": res.get("request_latency_sec", res["latency"]),
+                    "retry_wait_sec": res.get("retry_wait_sec", 0.0),
+                    "elapsed_sec": res.get("elapsed_latency_sec", res["latency"]),
                     "cost_usd": res["cost"],
-                    "status": "failed",
+                    "status": res.get("status", "failed"),
                     "error": res.get("error", "Unknown API error")
                 })
-                print(f"  -> {tech}: API call failed; " f"Reason: {res.get('error', 'Unknown API error')}")
+                print(f"  -> {tech}: {res['status'].upper()}; Reason: {res.get('error', 'Unknown API error')}")
+                pd.DataFrame(records).to_json(checkpoint_path, orient="records", indent=2)
+                pd.DataFrame(records).to_csv(DATA_DIR / "task1_results.csv", index=False)
+                if API_QUOTA_EXHAUSTED:
+                    break
                 continue
             
             content = res["content"]
@@ -456,11 +539,16 @@ def run_task1():
                 "reasoning_depth_basis": "surface_structure_proxy",
                 "input_tokens": res["input_tokens"],
                 "output_tokens": res["output_tokens"],
-                "latency_sec": res["latency"],
+                "latency_sec": res.get("request_latency_sec", res["latency"]),
+                "request_latency_sec": res.get("request_latency_sec", res["latency"]),
+                "retry_wait_sec": res.get("retry_wait_sec", 0.0),
+                "elapsed_sec": res.get("elapsed_latency_sec", res["latency"]),
                 "cost_usd": res["cost"],
                 "status": "success"
             })
             print(f"  -> {tech:30s} | Keyword Coverage: {keyword_coverage} | Depth: {reasoning_depth} | Latency: {res['latency']}s | Cost: ${res['cost']:.6f}")
+            pd.DataFrame(records).to_json(checkpoint_path, orient="records", indent=2)
+            pd.DataFrame(records).to_csv(DATA_DIR / "task1_results.csv", index=False)
             time.sleep(0.3)
             
     df_task1 = pd.DataFrame(records)
@@ -483,9 +571,10 @@ def run_task1():
     
     # 2. Reasoning Depth vs Latency
     plt.figure(figsize=(9, 5))
-    sns.scatterplot(data=df_task1, x="latency_sec", y="reasoning_depth", hue="technique", style="category", s=110, palette="viridis")
+    plot_task1 = df_task1[df_task1["status"] == "success"].copy()
+    sns.scatterplot(data=plot_task1, x="request_latency_sec", y="reasoning_depth", hue="technique", style="category", s=110, palette="viridis")
     plt.title("Reasoning Depth Proxy vs Execution Latency", fontsize=13, weight="bold", pad=12)
-    plt.xlabel("Execution Latency (seconds)", fontsize=11, labelpad=8)
+    plt.xlabel("Successful API request time (seconds; retry waits excluded)", fontsize=10, labelpad=8)
     plt.ylabel("Reasoning Depth Score (Proxy)", fontsize=11, labelpad=8)
     plt.legend(bbox_to_anchor=(1.02, 1), loc='upper left')
     plt.tight_layout()
@@ -766,7 +855,12 @@ class SecurityGuard:
         return True, "Arguments passed security checks"
 
 class SafeReActAgent:
-    """Bounded tool runner. Sequential and parallel calls share one safety gateway."""
+    """Bounded tool runner with a soft result-wait deadline.
+
+    IMPORTANT: ThreadPoolExecutor cannot forcibly terminate a running Python
+    function. A timeout stops waiting for its result and cancels work only if
+    it has not started; it is not a hard execution sandbox.
+    """
 
     def __init__(self, max_iterations: int = 5, timeout_sec: float = 5.0):
         self.max_iterations = max(1, int(max_iterations))
@@ -852,12 +946,19 @@ class SafeReActAgent:
             return {"status": "success", "result": result}
         except TimeoutError:
             future.cancel()
-            self.safety_logs.append(f"Timeout while executing {tool_name}.")
-            return {"status": "timeout", "error": "tool_execution_timeout"}
+            self.safety_logs.append(
+                f"Soft wait timeout for {tool_name}; worker termination is not guaranteed."
+            )
+            return {
+                "status": "timeout",
+                "error": "tool_result_wait_deadline_exceeded",
+                "timeout_kind": "soft_wait_timeout_thread_may_continue"
+            }
         except Exception as exc:
             self.safety_logs.append(f"{tool_name} failed: {exc}")
             return {"status": "failed", "error": str(exc)}
         finally:
+            # Cancels queued work only. A running thread cannot be force-stopped.
             executor.shutdown(wait=False, cancel_futures=True)
 
     def run_parallel_sources(self, topic: str) -> Tuple[Dict[str, Any], float, float]:
@@ -945,7 +1046,7 @@ def run_task2():
             else "Partial - tool or synthesis failure"
             ),
             "retrieval_mode": "SIMULATED_MOCK_KNOWLEDGE_BASE_NOT_LIVE_SEARCH",
-            "safety_mechanisms_active": "Iteration Limit, Schema Validation, Repetition Detection, Timeout, Sanitization, Fallback"
+            "safety_mechanisms_active": "Iteration Limit, Schema Validation, Repetition Detection, Soft Result-Wait Deadline (not hard termination), Sanitization, Fallback"
         })
         print(f"  [{item['id']}] Topic: {topic:25s} | "
             f"Mock sequential: {seq_lat}s | "
@@ -1098,8 +1199,8 @@ CURATED_DOMAIN_SNIPPETS = {
     "SNIP_12": "Neurosymbolic Integration: Combining deep representation learning with explicit symbolic knowledge graphs and formal logic engines prevents factual hallucinations and provides verifiable provenance."
 }
 
-def decompose_query(complex_query: str) -> List[str]:
-    """Decomposes a complex multi-hop research inquiry into 2-4 sub-queries."""
+def decompose_query_with_status(complex_query: str) -> Tuple[List[str], str]:
+    """Return sub-queries and whether they came from the LLM or fallback."""
     prompt = (
         f"Decompose the following complex research question into exactly 3 atomic sub-queries that can be investigated independently:\n"
         f"Complex Question: '{complex_query}'\n"
@@ -1107,13 +1208,20 @@ def decompose_query(complex_query: str) -> List[str]:
     )
     res = call_groq_llm(prompt, temperature=0.1, max_tokens=200)
     lines = [line.strip() for line in res["content"].split("\n") if line.strip() and (line[0].isdigit() or line.startswith("-"))]
-    sub_queries = [re.sub(r"^[\d\.\-\s]+", "", l) for l in lines][:3]
-    if len(sub_queries) < 2:
-        sub_queries = [
-            f"Theoretical principles and mechanisms of {complex_query[:40]}",
-            f"Empirical performance benchmarks and hardware constraints",
-            f"Comparative synthesis and state-of-the-art consensus"
-        ]
+    sub_queries = [re.sub(r"^[\d\.\-\s]+", "", line) for line in lines][:3]
+    if res.get("status") == "success" and len(sub_queries) >= 2:
+        return sub_queries, "llm_decomposition_success"
+    fallback_queries = [
+        f"Theoretical principles and mechanisms of {complex_query[:40]}",
+        "Empirical performance benchmarks and hardware constraints",
+        "Comparative synthesis and state-of-the-art consensus"
+    ]
+    return fallback_queries, f"fallback_used_after_{res.get('status', 'invalid_output')}"
+
+
+def decompose_query(complex_query: str) -> List[str]:
+    """Backward-compatible wrapper used by Task 3."""
+    sub_queries, _status = decompose_query_with_status(complex_query)
     return sub_queries
 
 
@@ -1443,17 +1551,17 @@ CONFLICT_SCENARIOS = [
 ]
 
 def resolve_conflict_weighted(scenario: dict) -> Tuple[str, str, float]:
-    """Implements Credibility-Weighted Evidence-Strength Scoring."""
+    """Rule-based conflict-resolution demonstration using configured credibility values."""
     sources = [scenario["source_A"], scenario["source_B"], scenario["source_C"]]
-    # Calculate score for scientific consensus vs sensational claims
-    # Weight = credibility * authority
+    # Current prototype ranks sources by the configured credibility field only.
+    # It does not calculate credibility x relevance x authority.
     scored_sources = sorted(sources, key=lambda s: s["credibility"], reverse=True)
     winner = scored_sources[0]
     
     # Naive majority vote might be swayed if multiple non-peer reviewed sources agree
     naive_consensus = scenario["source_C"]["claim"]
     weighted_resolution = (
-        f"Verified via Credibility-Weighted Resolution (Confidence: {winner['credibility']}% - {winner['publisher']}): "
+        f"Rule-based selection by configured credibility only (not verification; configured value: {winner['credibility']}% - {winner['publisher']}): "
         f"{winner['claim']} (Refuted unverified claims from low-credibility sources)."
     )
     return naive_consensus, weighted_resolution, winner["credibility"] / 100.0
@@ -1479,10 +1587,7 @@ def run_task4():
         )
         res = call_groq_llm(prompt, temperature=0.1, max_tokens=450)
         
-        # Hallucination self-correction pass
-        # Verify if response contains unverified claims from Source B
-        # No labelled claim-level ground truth is available; do not infer a rate
-        # from a keyword hit or a manually selected test phrase.
+        # No claim-level verifier or correction/regeneration pass is implemented.
         post_hallucination_rate = None
         
         records.append({
@@ -1495,10 +1600,10 @@ def run_task4():
             "winner_credibility": winner_conf,
             "pre_correction_hallucination_pct": None,
             "post_correction_hallucination_pct": post_hallucination_rate,
-            "hallucination_metric_note": "Not measured; requires labelled claim-level verification.",
+            "hallucination_metric_note": "NOT IMPLEMENTED: no claim-level verification or correction pass; rate not measured.",
             "citation_accuracy_pct": None,
-            "citation_accuracy_note": "Not measured; requires claim-level citation annotation.",
-            "conflict_resolved": "Rule-based selection completed; correctness not independently validated.",
+            "citation_accuracy_note": "NOT IMPLEMENTED: citation entailment was not checked; accuracy not measured.",
+            "conflict_resolved": "Rule-based highest-configured-credibility selection completed; correctness not independently validated.",
             "scenario_data_type": "synthetic_test_fixture"
         })
         print(f"  [{sc['id']}] Topic: {sc['topic']:32s} | Winner: {sc['source_A']['publisher']} (Score: {sc['source_A']['credibility']}) | Resolved: Yes")
@@ -1580,76 +1685,141 @@ SELF_INSTRUCT_SEEDS = [
     {"id": "SEED_05", "instruction": "Analyze how surrogate gradient descent overcomes the non-differentiable nature of spiking neurons.", "input": "Heaviside step firing threshold.", "output": "Standard spiking neurons emit discrete Heaviside spikes Theta(u - V_th), whose derivative is a Dirac delta function yielding zero gradients almost everywhere. Surrogate gradient methods replace the step derivative during backpropagation with a smooth, continuous function (e.g., fast sigmoid, arctan) enabling gradient descent on deep SNNs."}
 ]
 
-def generate_self_instruct_dataset(num_target: int = 30) -> List[Dict[str, Any]]:
-    """Generates synthetic instruction-input-output pairs and applies filtering."""
-    print(f"\n[Self-Instruct] Generating {num_target} synthetic research instructions from 5 seed tasks...")
-    synthetic_samples = []
-    
-    prompt = (
-        "You are an automated research dataset generator (Self-Instruct). Based on the following seed research tasks:\n"
-        "1. Topological surface code QEC\n"
-        "2. Neuromorphic memristor synaptic plasticity\n"
-        "3. Tokamak fusion plasma ignition\n"
-        "4. Tensor network quantum simulation\n"
-        "5. Spiking neural network surrogate gradients\n\n"
-        "Generate 6 diverse, high-quality research instruction-input-output pairs in the domain of Advanced Computing and Applied Physics.\n"
-        "Format as clean JSON list of objects: [{'instruction': '...', 'input': '...', 'output': '...'}]"
-    )
-    
-    # We call Groq to generate 3 batches of 10 or 1 batch of high quality instructions
-    for batch_idx in range(3):
-        res = call_groq_llm(prompt, temperature=0.7, max_tokens=900)
-        # Parse json
+def _extract_json_array(text: str) -> List[Dict[str, Any]]:
+    """Extract a JSON array from plain text, fenced Markdown, or surrounding prose."""
+    if not text:
+        return []
+    candidates = [text.strip()]
+    candidates.extend(re.findall(r"```(?:json)?\s*(.*?)```", text, flags=re.I | re.S))
+    # Scan balanced brackets so braces inside quoted strings do not truncate output.
+    for opening in re.finditer(r"\[", text):
+        depth, in_string, escaped = 0, False, False
+        for pos in range(opening.start(), len(text)):
+            ch = text[pos]
+            if in_string:
+                if escaped: escaped = False
+                elif ch == "\\": escaped = True
+                elif ch == '"': in_string = False
+                continue
+            if ch == '"': in_string = True
+            elif ch == "[": depth += 1
+            elif ch == "]":
+                depth -= 1
+                if depth == 0:
+                    candidates.append(text[opening.start():pos + 1])
+                    break
+    for candidate in candidates:
+        candidate = re.sub(r",\s*([}\]])", r"\1", candidate.strip())
         try:
-            match = re.search(r"\[\s*\{.*\}\s*\]", res["content"], re.DOTALL)
-            if match:
-                batch_data = json.loads(match.group(0))
-                synthetic_samples.extend(batch_data)
-        except Exception:
-            # Fallback procedural generation if model output has formatting quirks
-            pass
-            
-    # If LLM didn't return full 30, procedurally supplement diverse high-level items
-    topics = [
-        ("Quantum Annealing", "Transverse-field Ising Hamiltonian", "Adiabatic quantum annealing minimizes cost functions through quantum tunneling across energy barriers."),
-        ("Memristive Crossbars", "Vector-Matrix Multiplication (VMM)", "Ohm's law and Kirchhoff's current law perform parallel O(1) analog dot products in crossbar arrays."),
-        ("Stellarator Optimization", "Quasi-symmetric magnetic equilibrium", "Modern stellarators employ 3D modular coils optimized via supercomputers to eliminate neoclassical transport."),
-        ("Boson Sampling", "Linear optical interferometers", "Matrix permanents governing photon bunching demonstrate hard complexity classes #P-complete for classical simulation."),
-        ("Event-Based Vision", "Neuromorphic asynchronous cameras", "DVS pixels fire only upon logarithmic intensity changes, reducing data bandwidth by 99% compared to frame-based video."),
-        ("Direct Preference Optimization", "Policy optimization without reward models", "DPO derives closed-form reward from preference data, optimizing language models without unstable PPO actor-critic dynamics.")
-    ]
-    while len(synthetic_samples) < num_target:
-        idx = len(synthetic_samples) % len(topics)
-        t, inp, out = topics[idx]
-        synthetic_samples.append({
-            "instruction": f"Synthesize the physical and computational foundation of {t}.",
-            "input": inp,
-            "output": out + f" Demonstrates fundamental trade-offs in scalable deployment for {t}."
-        })
-        
-    synthetic_samples = synthetic_samples[:num_target]
-    
-    # Quality & Deduplication Filtering:
-    # 1. Deduplication via Jaccard similarity on instruction words (< 0.75)
-    # 2. Length heuristics: instruction > 5 words, output > 15 words
-    filtered_samples = []
-    seen_wordsets = []
-    for s in synthetic_samples:
-        words = set(s.get("instruction", "").lower().split())
-        if len(words) < 5 or len(s.get("output", "").split()) < 10:
+            value = json.loads(candidate)
+        except (json.JSONDecodeError, TypeError):
             continue
-        # Check jaccard against seen
-        is_dup = False
-        for sw in seen_wordsets:
-            jaccard = len(words.intersection(sw)) / max(len(words.union(sw)), 1)
-            if jaccard > 0.70:
-                is_dup = True
+        if isinstance(value, dict):
+            value = value.get("samples", value.get("data", value.get("examples", [])))
+        if isinstance(value, list):
+            valid = []
+            for item in value:
+                if isinstance(item, dict):
+                    normalized = {k: str(item.get(k, "")).strip() for k in ("instruction", "input", "output")}
+                    if normalized["instruction"] and normalized["output"]:
+                        valid.append(normalized)
+            if valid:
+                return valid
+    return []
+
+
+def generate_self_instruct_dataset(num_target: int = 30) -> List[Dict[str, Any]]:
+    """Generate up to num_target Groq examples, then transparently fill gaps procedurally."""
+    print(f"\n[Self-Instruct] Target: {num_target} retained examples")
+    synthetic_samples: List[Dict[str, Any]] = []
+    batch_size = 3
+    max_batches = max(3, (num_target + batch_size - 1) // batch_size)
+    for batch_idx in range(max_batches):
+        remaining = num_target - len(synthetic_samples)
+        if remaining <= 0:
+            break
+        prompt = (
+            "Return ONLY a valid JSON array. Each item must have string keys instruction, input, output. "
+            f"Generate up to {min(batch_size, remaining)} distinct research instruction/input/output examples. "
+            "Do not use Markdown fences or explanatory text. Cover advanced computing, AI/ML, "
+            "quantum computing, neuromorphic systems, and applied physics."
+        )
+        res = call_groq_llm(prompt, temperature=0.7, max_tokens=2200)
+        raw = res.get("content", "") if isinstance(res, dict) else ""
+        parsed = _extract_json_array(raw) if res.get("status") == "success" else []
+        accepted = 0
+        for sample in parsed:
+            sample["generation_source"] = "groq_llm"
+            synthetic_samples.append(sample)
+            accepted += 1
+            if len(synthetic_samples) >= num_target:
                 break
-        if not is_dup:
-            filtered_samples.append(s)
-            seen_wordsets.append(words)
-            
-    print(f"[Self-Instruct] Generated {len(synthetic_samples)} synthetic samples. Retained {len(filtered_samples)} after deduplication & quality filtering.")
+        print(
+            f"[Self-Instruct][Batch {batch_idx + 1}/{max_batches}] "
+            f"status={res.get('status', 'unknown') if isinstance(res, dict) else 'invalid_response'}; "
+            f"parsed={len(parsed)}; accepted={accepted}; "
+            f"response_chars={len(raw)}"
+        )
+
+    # Procedural examples are an explicit gap-fill, never relabelled as Groq output.
+    topics = [
+        ("Quantum Annealing", "Transverse-field Ising Hamiltonian", "Explain how transverse-field quantum annealing explores an energy landscape and identify the assumptions behind an adiabatic optimization claim."),
+        ("Memristive Crossbars", "Vector-matrix multiplication", "Explain how conductance states and Kirchhoff's laws implement analog vector-matrix multiplication, including precision and noise limitations."),
+        ("Stellarator Optimization", "Quasi-symmetric magnetic equilibrium", "Describe how three-dimensional coil optimization influences quasi-symmetry and plasma confinement in stellarators."),
+        ("Boson Sampling", "Linear optical interferometers", "Explain the role of matrix permanents in boson sampling and distinguish computational hardness from practical quantum advantage."),
+        ("Event-Based Vision", "Asynchronous pixel events", "Compare event-camera sensing with frame-based imaging and discuss bandwidth, latency, and noise trade-offs."),
+        ("Direct Preference Optimization", "Preference-based policy optimization", "Derive the intuition behind DPO and explain how preference pairs influence a policy without an explicit reward-model training stage."),
+        ("Graph Neural Networks", "Message passing", "Explain message passing in graph neural networks and discuss over-smoothing and over-squashing."),
+        ("Retrieval-Augmented Generation", "Evidence grounding", "Describe how retrieval can ground generated answers and why retrieval alone does not guarantee citation entailment."),
+        ("Spiking Neural Networks", "Surrogate gradients", "Explain surrogate-gradient learning and identify the approximation introduced during backpropagation."),
+        ("Quantum Error Correction", "Syndrome extraction", "Explain how stabilizer measurements identify error syndromes without directly measuring encoded logical information.")
+    ]
+    fallback_index = 0
+    while len(synthetic_samples) < num_target:
+        topic, inp, instruction = topics[fallback_index % len(topics)]
+        fallback_index += 1
+        synthetic_samples.append({
+            "instruction": instruction,
+            "input": f"Research focus: {topic}; context: {inp}.",
+            "output": f"A sound analysis of {topic} should define the mechanism, state its assumptions, distinguish theoretical results from measured evidence, and discuss practical limitations.",
+            "generation_source": "procedural_fallback"
+        })
+
+    # Deduplicate by normalized instruction; do not discard valid unique examples merely
+    # because short instructions share common vocabulary.
+    filtered_samples: List[Dict[str, Any]] = []
+    seen = set()
+    for sample in synthetic_samples:
+        instruction = re.sub(r"\W+", " ", sample.get("instruction", "").lower()).strip()
+        if len(instruction.split()) < 5 or len(sample.get("output", "").split()) < 8:
+            continue
+        key = instruction
+        if key in seen:
+            continue
+        seen.add(key)
+        filtered_samples.append(sample)
+        if len(filtered_samples) == num_target:
+            break
+
+    # If any filtering removed an item, add uniquely indexed procedural examples to hit target.
+    while len(filtered_samples) < num_target:
+        idx = len(filtered_samples) + 1
+        filtered_samples.append({
+            "instruction": f"Analyze research methodology and limitations for advanced computing topic {idx}.",
+            "input": f"Research-methods case {idx}: reproducibility, baseline selection, and evaluation design.",
+            "output": "A rigorous analysis defines the hypothesis, documents assumptions, compares suitable baselines, reports uncertainty, and separates measured findings from illustrative examples.",
+            "generation_source": "procedural_fallback"
+        })
+
+    source_counts: Dict[str, int] = {}
+    for sample in filtered_samples:
+        source = sample["generation_source"]
+        source_counts[source] = source_counts.get(source, 0) + 1
+    assert len(filtered_samples) == num_target, f"Expected {num_target} records, got {len(filtered_samples)}"
+    assert sum(source_counts.values()) == num_target
+    print(f"[Self-Instruct] Final retained records: {len(filtered_samples)}/{num_target}")
+    print(f"[Self-Instruct] Actual generation-source distribution: {json.dumps(source_counts, sort_keys=True)}")
+    print("[Self-Instruct] Filters are structural/duplicate heuristics only; factual quality was not evaluated.")
     return filtered_samples
 
 def calculate_dpo_loss(
@@ -1658,8 +1828,8 @@ def calculate_dpo_loss(
     y_rejected: str,
     beta: float = 0.1
 ) -> Dict[str, Any]:
-    """Exact mathematical calculation of Direct Preference Optimization (DPO) Loss."""
-    # Define representative log-probabilities from policy pi_theta and reference model pi_ref
+    """Illustrative DPO arithmetic using representative, not model-computed, log probabilities."""
+    # These are hand-set example inputs; no policy/reference model forward pass is run.
     # For a high quality preferred answer y_w:
     # Policy model assigns higher probability to y_w than reference model
     log_pi_theta_yw = -14.2   # log P_theta(y_w | x)
@@ -1688,6 +1858,8 @@ def calculate_dpo_loss(
         "preferred_response_yw": y_preferred,
         "rejected_response_yl": y_rejected,
         "beta": beta,
+        "input_basis": "hand_set_representative_log_probabilities_not_model_outputs",
+        "training_performed": False,
         "log_pi_theta_yw": log_pi_theta_yw,
         "log_pi_ref_yw": log_pi_ref_yw,
         "log_pi_theta_yl": log_pi_theta_yl,
@@ -1706,6 +1878,52 @@ def run_task5():
     
     # 1. Self-Instruct Pipeline
     dataset = generate_self_instruct_dataset(num_target=30)
+
+    # Validate dataset structure
+    required_fields = ["instruction", "input", "output"]
+
+    valid_dataset = []
+    for index, item in enumerate(dataset):
+        if not isinstance(item, dict):
+            print(f"[WARNING] Invalid record at index {index}")
+            continue
+
+        if all(
+            isinstance(item.get(field), str)
+            for field in required_fields
+        ) and all(item[field].strip() for field in ["instruction", "output"]):
+            valid_dataset.append(item)
+        else:
+            print(f"[WARNING] Incomplete record at index {index}")
+
+    # Record actual generation provenance
+    from collections import Counter
+
+    source_counts = Counter(
+        item.get("generation_source", "unknown")
+        for item in valid_dataset
+    )
+
+    print("\n[Self-Instruct Generation Summary]")
+    print(f"  Target examples: 30")
+    print(f"  Valid examples: {len(valid_dataset)}")
+    print(f"  Generation sources: {dict(source_counts)}")
+
+    # Save only validated records
+    with open(
+        DATA_DIR / "task5_self_instruct_dataset.json",
+        "w",
+        encoding="utf-8"
+    ) as f:
+        json.dump(valid_dataset, f, indent=2, ensure_ascii=False)
+
+    if len(valid_dataset) != 30:
+        raise ValueError(
+            f"Expected 30 valid examples, got {len(valid_dataset)}"
+        )
+
+    print("[SUCCESS] Dataset validation completed.")
+
     with open(DATA_DIR / "task5_self_instruct_dataset.json", "w", encoding="utf-8") as f:
         json.dump(dataset, f, indent=2)
         
@@ -1728,9 +1946,9 @@ def run_task5():
         
     # 3. PEFT Comparison Matrix
     peft_matrix = [
-        {"Method": "Full Fine-Tuning (FFT)", "Trainable Parameters": "100%", "GPU Memory (VRAM)": "16x model size (optimizer states)", "Storage Overhead": "100% per task checkpoint", "Catastrophic Forgetting Risk": "High", "Inference Latency Overhead": "0% (Native weights)", "Target Use Case": "Foundational domain shift with abundant compute"},
-        {"Method": "LoRA (Low-Rank Adaptation)", "Trainable Parameters": "0.1% - 1.0%", "GPU Memory (VRAM)": "3x model size (frozen base + adapter grads)", "Storage Overhead": "<1% (~20-100MB adapter)", "Catastrophic Forgetting Risk": "Low (base weights frozen)", "Inference Latency Overhead": "0% (adapter can be folded into base)", "Target Use Case": "Task-specific adaptation and multi-tenant serving"},
-        {"Method": "QLoRA (Quantized LoRA)", "Trainable Parameters": "0.1% - 1.0%", "GPU Memory (VRAM)": "1.5x model size (4-bit NormalFloat base)", "Storage Overhead": "<1% (~20-100MB adapter)", "Catastrophic Forgetting Risk": "Low (frozen NF4 base)", "Inference Latency Overhead": "0% after dequantization folding", "Target Use Case": "Resource-constrained fine-tuning on consumer GPUs"}
+        {"Method": "Full Fine-Tuning (FFT)", "Trainable Parameters": "All model parameters", "GPU Memory (VRAM)": "Highest; depends on precision, optimizer, activations, batch size and sharding", "Storage Overhead": "A full model checkpoint per task/version", "Catastrophic Forgetting Risk": "Can be higher without regularization/replay", "Inference Latency Overhead": "Usually none from adapters; model architecture/serving determine latency", "Target Use Case": "Broad adaptation when compute and data are sufficient"},
+        {"Method": "LoRA (Low-Rank Adaptation)", "Trainable Parameters": "A small fraction; depends on rank and target modules", "GPU Memory (VRAM)": "Lower than full fine-tuning in many setups; depends on base weights, activations and optimizer", "Storage Overhead": "Adapter checkpoint; size depends on rank and target modules", "Catastrophic Forgetting Risk": "Base weights remain frozen; task interference is still possible", "Inference Latency Overhead": "May add adapter overhead unless merged; hardware/runtime dependent", "Target Use Case": "Task-specific adaptation and multiple adapters"},
+        {"Method": "QLoRA (Quantized LoRA)", "Trainable Parameters": "LoRA adapter parameters", "GPU Memory (VRAM)": "Often lower than LoRA by quantizing frozen base weights; actual peak depends on setup", "Storage Overhead": "Quantized base plus adapter; adapter size depends on rank", "Catastrophic Forgetting Risk": "Base weights remain frozen; task interference is still possible", "Inference Latency Overhead": "Depends on quantized inference and adapter merge/runtime support", "Target Use Case": "Fine-tuning with constrained accelerator memory"}
     ]
     df_peft = pd.DataFrame(peft_matrix)
     df_peft.to_json(DATA_DIR / "task5_peft_comparison.json", orient="records", indent=2)
@@ -1750,6 +1968,24 @@ TASK6_QUESTIONS = [
     {"id": "P_Q5", "cat": "Cost-Latency Trade-Off", "q": "Summarize the primary trade-offs between resistive ReRAM and phase-change PCRAM for neuromorphic synaptic crossbars."}
 ]
 
+# ============================================================
+# INJECT ORIGINAL TASK CONSTANTS INTO THE PATCH MODULE
+# ============================================================
+
+# Connect the patch module to the main script's runtime dependencies.
+dataset_fixes.CONFLICT_SCENARIOS = CONFLICT_SCENARIOS
+dataset_fixes.SELF_INSTRUCT_SEEDS = SELF_INSTRUCT_SEEDS
+dataset_fixes.TASK6_QUESTIONS = TASK6_QUESTIONS
+
+dataset_fixes.call_groq_llm = call_groq_llm
+dataset_fixes.DATA_DIR = DATA_DIR
+dataset_fixes.FIGURES_DIR = FIGURES_DIR
+dataset_fixes.CURATED_DOMAIN_SNIPPETS = CURATED_DOMAIN_SNIPPETS
+
+print("[INIT] All Task 4, Task 5 and Task 6 dependencies connected.")
+
+print("[INIT] Task 4, Task 5 and Task 6 constants connected.")
+
 def run_task6():
     print("\n" + "="*70)
     print("RUNNING TASK 6: PARADIGM DIFFERENTIATION & MULTI-TURN RESEARCH")
@@ -1757,7 +1993,7 @@ def run_task6():
     
     # 1. Empirical Paradigm Comparison across 5 Questions
     records = []
-    print("\n[Benchmarking 5 Questions across Prompting vs RAG vs Simulated Fine-Tuning]")
+    print("\n[Benchmarking 5 Questions across Prompting vs Fixed-Context Demo vs Prompt-Based Specialization]")
     
     for item in TASK6_QUESTIONS:
         qid = item["id"]
@@ -1772,9 +2008,8 @@ def run_task6():
         rag_prompt = f"VERIFIED CONTEXT:\n{rag_evidence}\n\nQUESTION: {q}\nAnswer strictly based on the provided context with citations."
         res_rag = call_groq_llm(rag_prompt, system_prompt="You are a strict RAG retrieval assistant.", temperature=0.1, max_tokens=400)
         
-        # Condition 3: Simulated Fine-Tuned Domain Model
-        # Simulated using a fine-tuned specialized system prompt with rigorous domain weights representation
-        ft_system = "You are a specialized Domain-Fine-Tuned Neural Model (AIML-QuantumNeuro-v2). You generate terse, mathematically formalized domain outputs."
+        # Condition 3: Prompt-Based Specialization (no weights are fine-tuned)
+        ft_system = "You are a domain-specialized research assistant. Generate concise, mathematically precise domain outputs."
         res_ft = call_groq_llm(q, system_prompt=ft_system, temperature=0.2, max_tokens=400)
         
         records.append({
@@ -1783,27 +2018,40 @@ def run_task6():
             "question": q,
             "prompting_quality": None,
             "prompting_hallucination_pct": None,
-            "prompting_latency_sec": res_prompting["latency"],
+            "prompting_status": res_prompting["status"],
+            "prompting_latency_sec": (res_prompting.get("request_latency_sec", res_prompting["latency"]) if res_prompting["status"] == "success" else None),
+            "prompting_elapsed_sec": res_prompting.get("elapsed_latency_sec", res_prompting["latency"]),
+            "prompting_retry_wait_sec": res_prompting.get("retry_wait_sec", 0.0),
+            "prompting_error": res_prompting.get("error"),
             "prompting_cost_usd": res_prompting["cost"],
             "rag_quality": None,
             "rag_hallucination_pct": None,
-            "rag_latency_sec": res_rag["latency"],
+            "rag_status": res_rag["status"],
+            "rag_latency_sec": (res_rag.get("request_latency_sec", res_rag["latency"]) if res_rag["status"] == "success" else None),
+            "rag_elapsed_sec": res_rag.get("elapsed_latency_sec", res_rag["latency"]),
+            "rag_retry_wait_sec": res_rag.get("retry_wait_sec", 0.0),
+            "rag_error": res_rag.get("error"),
             "rag_cost_usd": res_rag["cost"],
             "ft_quality": None,
             "ft_hallucination_pct": None,
-            "ft_latency_sec": res_ft["latency"],
+            "ft_status": res_ft["status"],
+            "ft_latency_sec": (res_ft.get("request_latency_sec", res_ft["latency"]) if res_ft["status"] == "success" else None),
+            "ft_elapsed_sec": res_ft.get("elapsed_latency_sec", res_ft["latency"]),
+            "ft_retry_wait_sec": res_ft.get("retry_wait_sec", 0.0),
+            "ft_error": res_ft.get("error"),
             "ft_cost_usd": res_ft["cost"],
-            "prompting_snippet": res_prompting["content"][:120] + "...",
-            "rag_snippet": res_rag["content"][:120] + "...",
-            "ft_snippet": res_ft["content"][:120] + "..."
+            "prompting_snippet": (res_prompting["content"][:120] + "...") if res_prompting["status"] == "success" else None,
+            "rag_snippet": (res_rag["content"][:120] + "...") if res_rag["status"] == "success" else None,
+            "ft_snippet": (res_ft["content"][:120] + "...") if res_ft["status"] == "success" else None
         })
-        print(f"  [{qid}] Cat: {cat:25s} | Prompting Lat: {res_prompting['latency']}s | RAG Lat: {res_rag['latency']}s | FT Lat: {res_ft['latency']}s")
+        print(f"  [{qid}] Prompt={res_prompting['status']} ({res_prompting.get('request_latency_sec', 0):.3f}s request); Fixed-context={res_rag['status']}; Prompt-specialization={res_ft['status']}")
         time.sleep(0.3)
         
     df_task6 = pd.DataFrame(records)
     df_task6["quality_and_hallucination_basis"] = "illustrative_values_not_measured_from_answers"
     df_task6["fine_tuning_condition"] = "prompt_based_specialization_simulation_not_actual_fine_tuning"
     df_task6["rag_context_basis"] = "fixed_demo_snippets_not_question_specific_retrieval"
+    df_task6["latency_basis"] = "successful_api_request_time_excludes_retry_waits; failed calls are null"
     df_task6.to_json(DATA_DIR / "task6_results.json", orient="records", indent=2)
     df_task6.to_csv(DATA_DIR / "task6_results.csv", index=False)
     
@@ -1835,18 +2083,23 @@ def run_task6():
         fa = None
         
         conversation_history.append({"role": "user", "content": u_content})
-        conversation_history.append({"role": "assistant", "content": turn_res["content"]})
+        if turn_res.get("status") == "success":
+            conversation_history.append({"role": "assistant", "content": turn_res.get("content", "")})
         
         turn_records.append({
             "turn_number": t_num,
             "dialogue_type": turn_info["type"],
             "user_inquiry": u_content,
-            "agent_response": turn_res["content"],
+            "agent_response": turn_res.get("content") if turn_res.get("status") == "success" else None,
+            "request_status": turn_res.get("status", "unknown"),
+            "error": turn_res.get("error"),
             "context_retention_score": crs,
             "follow_up_accuracy": fa,
-            "latency_sec": turn_res["latency"]
+            "request_latency_sec": turn_res.get("request_latency_sec") if turn_res.get("status") == "success" else None,
+            "retry_wait_sec": turn_res.get("retry_wait_sec"),
+            "elapsed_latency_sec": turn_res.get("elapsed_latency_sec", turn_res.get("latency"))
         })
-        print(f"  Turn {t_num} [{turn_info['type']}]: CRS/FA not evaluated | Latency={turn_res['latency']}s")
+        print(f"  Turn {t_num} [{turn_info['type']}]: status={turn_res.get('status')} | CRS/FA not evaluated | elapsed={turn_res.get('elapsed_latency_sec', turn_res.get('latency'))}s")
         time.sleep(0.3)
         
     df_multiturn = pd.DataFrame(turn_records)
@@ -1854,26 +2107,43 @@ def run_task6():
     df_multiturn.to_json(DATA_DIR / "task6_multiturn_dialogue.json", orient="records", indent=2)
     df_multiturn.to_csv(DATA_DIR / "task6_multiturn_dialogue.csv", index=False)
     
-    # Generate Task 6 Plot: Paradigm Comparison across Dimensions
-    plt.figure(figsize=(9, 5))
-    metrics = ['Latency (s)', 'Cost ($x10^-4)']
-    prompting_vals = [df_task6['prompting_latency_sec'].mean(), df_task6['prompting_cost_usd'].mean() * 10000]
-    rag_vals = [df_task6['rag_latency_sec'].mean(), df_task6['rag_cost_usd'].mean() * 10000]
-    ft_vals = [df_task6['ft_latency_sec'].mean(), df_task6['ft_cost_usd'].mean() * 10000]
-    
-    x = np.arange(len(metrics))
-    w = 0.25
-    plt.bar(x - w, prompting_vals, w, label='Zero-Shot Prompting', color='#fee090')
-    plt.bar(x, rag_vals, w, label='Evidence-Grounded RAG', color='#4575b4')
-    plt.bar(x + w, ft_vals, w, label='Domain Fine-Tuning', color='#d73027')
-    plt.xticks(x, metrics, fontsize=10, weight="medium")
-    plt.title("Prompting, Fixed-Snippet RAG and Prompt-Based Specialization: Demo Comparison", fontsize=11, weight="bold")
-    plt.figtext(0.5, 0.01, "Quality and hallucination scores not evaluated; latency/cost only.", ha="center", fontsize=8)
-    plt.legend()
+    # Separate plots: seconds and dollars are different units and must not share an axis.
+    arms = [
+        ("Zero-Shot Prompting", "prompting", "prompting_latency_sec", "prompting_cost_usd"),
+        ("Fixed-Context Demonstration", "rag", "rag_latency_sec", "rag_cost_usd"),
+        ("Prompt-Based Specialization", "ft", "ft_latency_sec", "ft_cost_usd"),
+    ]
+    latency_summary = []
+    cost_summary = []
+    for label, prefix, latency_col, cost_col in arms:
+        ok = df_task6[df_task6[f"{prefix}_status"] == "success"]
+        latency_summary.append({"condition": label, "mean": ok[latency_col].dropna().mean()})
+        cost_summary.append({"condition": label, "mean": ok[cost_col].dropna().mean()})
+
+    latency_df = pd.DataFrame(latency_summary).dropna()
+    plt.figure(figsize=(8, 4.8))
+    if not latency_df.empty:
+        plt.bar(latency_df["condition"], latency_df["mean"])
+    plt.ylabel("Mean successful API request latency (seconds)")
+    plt.xlabel("")
+    plt.xticks(rotation=15, ha="right")
+    plt.title("Task 6: Successful API Request Latency")
     plt.tight_layout()
-    plt.savefig(FIGURES_DIR / "task6_paradigm.png")
+    plt.savefig(FIGURES_DIR / "task6_latency.png")
     plt.close()
-    print("[TASK 6 DONE] Results saved to data/task6_results.json, multiturn dialogue, and figures/task6_paradigm.png")
+
+    cost_df = pd.DataFrame(cost_summary).dropna()
+    plt.figure(figsize=(8, 4.8))
+    if not cost_df.empty:
+        plt.bar(cost_df["condition"], cost_df["mean"])
+    plt.ylabel("Mean estimated API cost (USD)")
+    plt.xlabel("")
+    plt.xticks(rotation=15, ha="right")
+    plt.title("Task 6: Estimated API Cost")
+    plt.tight_layout()
+    plt.savefig(FIGURES_DIR / "task6_cost.png")
+    plt.close()
+    print("[TASK 6 DONE] Results saved to data/task6_results.json, multiturn dialogue, figures/task6_latency.png, and figures/task6_cost.png")
 
 # ==============================================================================
 # TASK 7: FULL INTEGRATION, EVALUATION & COST RECOMMENDATION
@@ -1895,7 +2165,8 @@ class IntegratedResearchAssistant:
         )
         self.working_memory.add_step(f"Retrieved episodic reflection: {reflection}")
 
-        sub_queries = decompose_query(query)
+        sub_queries, decomposition_status = decompose_query_with_status(query)
+        self.working_memory.add_step(f"Decomposition status: {decomposition_status}")
         self.working_memory.add_step(f"Decomposed query into: {', '.join(sub_queries)}")
         sources, sequential_latency, parallel_latency = self.agent_tools.run_parallel_sources(query[:120])
         evidence_text = json.dumps(sources, ensure_ascii=False, default=str)
@@ -1950,11 +2221,26 @@ class IntegratedResearchAssistant:
         total_cost = response.get("cost", 0.0) if response.get("status") == "success" else 0.0
         self.working_memory.add_step(f"Completed research pipeline in {total_latency:.3f}s")
 
+        retrieval_success_count = sum(
+            1 for value in sources.values()
+            if isinstance(value, str) or (isinstance(value, dict) and value.get("status") == "success")
+        )
+        retrieval_total_count = len(sources)
+        all_retrievals_succeeded = retrieval_total_count > 0 and retrieval_success_count == retrieval_total_count
+        llm_synthesis_succeeded = response.get("status") == "success"
+        pipeline_execution_status = (
+            "execution_stages_completed_quality_unvalidated"
+            if llm_synthesis_succeeded and all_retrievals_succeeded
+            and decomposition_status == "llm_decomposition_success"
+            else "partial_or_failed_or_fallback_used"
+        )
+
         return {
             "query": query,
             "category": category,
             "episodic_reflection": reflection,
             "sub_queries": sub_queries,
+            "decomposition_status": decomposition_status,
             "tools_executed": ["academic_search", "wikipedia_search", "news_search"],
             "retrieval_mode": "SIMULATED_MOCK_KNOWLEDGE_BASE_NOT_LIVE_SEARCH",
             "tool_latency_sequential_sec": sequential_latency,
@@ -1962,6 +2248,13 @@ class IntegratedResearchAssistant:
             "retrieved_evidence": evidence_records,
             "synthesized_response": answer,
             "llm_status": response.get("status"),
+            "llm_request_latency_sec": response.get("request_latency_sec"),
+            "llm_retry_wait_sec": response.get("retry_wait_sec"),
+            "retrieval_success_count": retrieval_success_count,
+            "retrieval_total_count": retrieval_total_count,
+            "retrieval_stage_status": "success" if all_retrievals_succeeded else "partial_or_failed",
+            "pipeline_execution_status": pipeline_execution_status,
+            "quality_evaluation_status": "not_evaluated_no_independent_annotations",
             "atomic_claims_count": len(claims),
             "verified_claims_count": 0,
             "verification_note": "Claims remain unverified until independently checked.",
@@ -2014,14 +2307,20 @@ def run_task7():
             "synthesis_quality": None,
             "citation_accuracy_pct": None,
             "hallucination_rate_pct": None,
-            "task_completion": "Completed" if audit["llm_status"] == "success" else "Partial - LLM request failed",
-            "evaluation_note": "Quality, citation accuracy, and hallucination rate require labelled evaluation data; not fabricated.",
+            "task_completion": audit["pipeline_execution_status"],
+            "llm_synthesis_request_status": audit["llm_status"],
+            "decomposition_status": audit["decomposition_status"],
+            "retrieval_stage_status": audit["retrieval_stage_status"],
+            "retrieval_success_count": audit["retrieval_success_count"],
+            "retrieval_total_count": audit["retrieval_total_count"],
+            "quality_evaluation_status": audit["quality_evaluation_status"],
+            "evaluation_note": "Execution-stage status is not factual quality validation; quality, citation accuracy, hallucination rate, and confidence remain unevaluated without labelled independent review.",
             "mean_confidence": audit["mean_confidence"],
             "latency_sec": audit["total_latency_sec"],
             "cost_usd": audit["total_cost_usd"],
             "synthesized_response": audit["synthesized_response"]
         })
-        print(f"  [{qid}] Cat: {cat:22s} | LLM: {audit['llm_status']} | Latency: {audit['total_latency_sec']}s | Cost: ${audit['total_cost_usd']:.6f}")
+        print(f"  [{qid}] LLM: {audit['llm_status']} | Retrieval: {audit['retrieval_success_count']}/{audit['retrieval_total_count']} | Pipeline: {audit['pipeline_execution_status']} | Elapsed: {audit['total_latency_sec']}s")
         time.sleep(0.3)
         
     df_eval = pd.DataFrame(eval_records)
@@ -2040,17 +2339,17 @@ def run_task7():
     box_props = dict(boxstyle='round,pad=0.5', facecolor='#e0f3f8', edgecolor='#02818a', linewidth=1.5)
     mem_props = dict(boxstyle='round,pad=0.5', facecolor='#fee391', edgecolor='#fe9929', linewidth=1.5)
     tool_props = dict(boxstyle='round,pad=0.5', facecolor='#d9f0a3', edgecolor='#78c679', linewidth=1.5)
-    veri_props = dict(boxstyle='round,pad=0.5', facecolor='#fbb4ae', edgecolor='#e41a1c', linewidth=1.5)
+    audit_props = dict(boxstyle='round,pad=0.5', facecolor='#fbb4ae', edgecolor='#e41a1c', linewidth=1.5)
     
     ax.text(0.12, 0.85, "1. User Research Query\n(Simple / Complex / Ambiguous)", ha='center', va='center', bbox=box_props, fontsize=9, weight='bold')
     ax.text(0.50, 0.85, "2. Query Decomposer & Router\n(Atomic Sub-Queries via CoT)", ha='center', va='center', bbox=box_props, fontsize=9, weight='bold')
     ax.text(0.88, 0.85, "3. Memory Integration\n• Bounded Working Deque\n• Episodic Reflection (20 Sessions)", ha='center', va='center', bbox=mem_props, fontsize=9, weight='bold')
     
     ax.text(0.15, 0.40, "4. Parallel Tool Engine\n• Academic Search\n• Wikipedia Search\n• News Search\n• Credibility Checker\n• Citation Generator", ha='center', va='center', bbox=tool_props, fontsize=8.5, weight='bold')
-    ax.text(0.52, 0.40, "5. Synthesis & Conflict Resolver\n• Credibility-Weighted Scoring\n• Citation Anchor Mapping", ha='center', va='center', bbox=box_props, fontsize=9, weight='bold')
-    ax.text(0.88, 0.40, "6. Hallucination Verifier\n• Atomic Premise Extraction\n• Self-Correction Pass\n• Confidence Calibration (ECE)", ha='center', va='center', bbox=veri_props, fontsize=8.5, weight='bold')
+    ax.text(0.52, 0.40, "5. Rule-Based Conflict Resolver\n• Highest Configured Credibility\n• No Claim Verification", ha='center', va='center', bbox=box_props, fontsize=9, weight='bold')
+    ax.text(0.88, 0.40, "6. Claim Audit Placeholder\n• Candidate Claim Extraction\n• Candidate Source IDs\n• No Entailment / ECE Validation", ha='center', va='center', bbox=audit_props, fontsize=8.2, weight='bold')
     
-    ax.text(0.52, 0.08, "7. Production Output: Verified Research Brief + Structured JSON Audit Trail", ha='center', va='center', bbox=dict(boxstyle='round,pad=0.6', facecolor='#b3cde3', edgecolor='#8856a7', linewidth=2), fontsize=10, weight='bold')
+    ax.text(0.52, 0.08, "7. Research Brief with Candidate Source Attribution (Not Verified) + Execution Audit (Factual Quality Unvalidated)", ha='center', va='center', bbox=dict(boxstyle='round,pad=0.6', facecolor='#b3cde3', edgecolor='#8856a7', linewidth=2), fontsize=9, weight='bold')
     
     # Arrows
     ax.annotate('', xy=(0.35, 0.85), xytext=(0.26, 0.85), arrowprops=dict(arrowstyle="->", lw=2, color='#02818a'))
@@ -2060,60 +2359,221 @@ def run_task7():
     ax.annotate('', xy=(0.72, 0.40), xytext=(0.67, 0.40), arrowprops=dict(arrowstyle="->", lw=2, color='#02818a'))
     ax.annotate('', xy=(0.65, 0.16), xytext=(0.80, 0.28), arrowprops=dict(arrowstyle="->", lw=2, color='#e41a1c'))
     
-    plt.title("End-to-End Autonomous Research Assistant Architecture", fontsize=13, weight="bold", pad=15)
+    plt.title("Research Assistant Prototype: Implemented Execution Path", fontsize=13, weight="bold", pad=15)
     plt.tight_layout()
     plt.savefig(FIGURES_DIR / "task7_architecture.png")
     plt.close()
     print("[TASK 7 DONE] Evaluation completed and architecture diagram saved.")
 
+from research_pipeline_utils import (
+    generate_self_instruct_dataset,
+    load_natural_questions_sample,
+    run_task4_claim_verification,
+    run_task6_rag_experiment,
+)
+
+nq_df = load_natural_questions_sample(sample_size=500)
+
+print(f"Natural Questions records loaded: {len(nq_df)}")
+
+
 # ==============================================================================
-# MAIN EXECUTION DISPATCHER
+# MAIN EXECUTION DISPATCHER 
 # ==============================================================================
+
 
 if __name__ == "__main__":
     t_start = time.time()
-    task_functions = [
-        ("Task 1", run_task1), ("Task 2", run_task2), ("Task 3", run_task3),
-        ("Task 4", run_task4), ("Task 5", run_task5), ("Task 6", run_task6),
-        ("Task 7", run_task7)
-    ]
-    completed, failed = [], []
+
+    completed = []
+    failed = []
 
     print("\n" + "#" * 75)
     print("STARTING FULL EXPERIMENTAL EXECUTION PIPELINE (TASKS 1 - 7)")
+    
+    if not API_DIAGNOSTIC_OK:
+        raise SystemExit(
+            "Groq startup diagnostic failed. "
+            "Fix connectivity/quota before running API-dependent tasks."
+        )
+
     print("#" * 75)
 
-    for task_name, task_function in task_functions:
+    # ---------------------------------------------------------
+    # DATASET PREPARATION
+    # ---------------------------------------------------------
+    print("\n[DATASET PREPARATION] Loading Natural Questions...")
+
+    try:
+        nq_df = load_natural_questions_sample(sample_size=500)
+        print(f"Natural Questions records loaded: {len(nq_df)}")
+    except Exception as exc:
+        print(f"[WARNING] Natural Questions loading failed: {exc}")
+        nq_df = None
+
+    # ---------------------------------------------------------
+    # TASK EXECUTION
+    # Each operation is tracked independently.
+    # ---------------------------------------------------------
+    task_functions = [
+        ("Task 1", run_task1),
+        ("Task 2", run_task2),
+        ("Task 3", run_task3),
+        ("Task 4", run_task4),
+        ("Task 4 - Claim Verification", run_task4_claim_verification),
+        ("Task 5", run_task5),
+        ("Task 6", run_task6),
+        ("Task 6 - RAG Experiment", run_task6_rag_experiment),
+        ("Task 7", run_task7),
+    ]
+
+    try:
+        for task_name, task_function in task_functions:
+
+            if API_QUOTA_EXHAUSTED:
+                print(
+                    f"[STOP] Skipping {task_name}: "
+                    "Groq quota exhausted. Existing checkpoints are preserved."
+                )
+                break
+
+            print(f"\n{'-' * 75}")
+            print(f"STARTING {task_name}")
+            print("-" * 75)
+
+            task_start = time.time()
+
+            try:
+                task_function()
+                completed.append(task_name)
+
+                task_duration = round(time.time() - task_start, 2)
+                print(
+                    f"[SUCCESS] {task_name} completed "
+                    f"in {task_duration} seconds."
+                )
+
+            except Exception as exc:
+                failed.append({
+                    "task": task_name,
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                })
+
+                print(f"[ERROR] {task_name} failed: {exc}")
+
+    finally:
+        # -----------------------------------------------------
+        # FINALIZATION
+        # Always attempt to save reproducibility metadata.
+        # -----------------------------------------------------
         try:
-            task_function()
-            completed.append(task_name)
+            save_reproducibility_metadata()
+            print("[SUCCESS] Reproducibility metadata saved.")
         except Exception as exc:
-            failed.append({"task": task_name, "error": str(exc)})
-            print(f"[ERROR] {task_name} failed: {exc}")
+            failed.append({
+                "task": "Reproducibility Metadata",
+                "error": str(exc),
+                "error_type": type(exc).__name__,
+            })
+            print(f"[ERROR] Could not save reproducibility metadata: {exc}")
 
-    save_reproducibility_metadata()
-    total_time = round(time.time() - t_start, 2)
-    run_summary = {
-        "completed_tasks": completed,
-        "failed_tasks": failed,
-        "duration_seconds": total_time,
-        "project_root": str(PROJECT_ROOT),
-        "data_directory": str(DATA_DIR),
-        "figures_directory": str(FIGURES_DIR),
-        "groq_model": GROQ_MODEL,
-        "random_seed": 42,
-        "note": "Task completion means code ran; it does not make illustrative metrics empirical."
-    }
-    with open(DATA_DIR / "execution_summary.json", "w", encoding="utf-8") as summary_file:
-        json.dump(run_summary, summary_file, indent=2)
+        total_time = round(time.time() - t_start, 2)
 
-    print("\n" + "#" * 75)
-    print(f"PIPELINE FINISHED IN {total_time} SECONDS")
-    print(f"Completed: {len(completed)}/7 | Failed: {len(failed)}/7")
-    print(f"Data files: {DATA_DIR}")
-    print(f"Figures: {FIGURES_DIR}")
-    print(f"Execution summary: {DATA_DIR / 'execution_summary.json'}")
-    print("#" * 75)
+        # -----------------------------------------------------
+        # ARTIFACT HASHING
+        # Hash only files that actually exist.
+        # -----------------------------------------------------
+        required_json_artifacts = [
+            "task1_results.json",
+            "task2_results.json",
+            "task2_security_result.json",
+            "task3_results.json",
+            "task4_results.json",
+            "task4_rag_triad.json",
+            "task5_self_instruct_dataset.json",
+            "task5_peft_comparison.json",
+            "task5_dpo_calculation.json",
+            "task6_results.json",
+            "task6_multiturn_dialogue.json",
+            "task7_evaluation_results.json",
+            "task7_sample_audit_trail.json",
+            "reproducibility_metadata.json",
+        ]
+
+        artifact_sha256 = {}
+
+        for filename in required_json_artifacts:
+            artifact_path = DATA_DIR / filename
+
+            if artifact_path.is_file():
+                try:
+                    artifact_sha256[filename] = hashlib.sha256(
+                        artifact_path.read_bytes()
+                    ).hexdigest()
+                except Exception as exc:
+                    print(
+                        f"[WARNING] Could not hash {filename}: {exc}"
+                    )
+
+        # -----------------------------------------------------
+        # EXECUTION SUMMARY
+        # -----------------------------------------------------
+        run_summary = {
+            "run_id": RUN_ID,
+            "run_started_epoch": RUN_STARTED_EPOCH,
+            "artifact_sha256": artifact_sha256,
+            "completed_tasks": completed,
+            "failed_tasks": failed,
+            "duration_seconds": total_time,
+            "project_root": str(PROJECT_ROOT),
+            "data_directory": str(DATA_DIR),
+            "figures_directory": str(FIGURES_DIR),
+            "groq_model": GROQ_MODEL,
+            "random_seed": 42,
+            "natural_questions_records_loaded": (
+                len(nq_df) if nq_df is not None else 0
+            ),
+            "note": (
+                "Task completion means code ran; it does not make "
+                "illustrative metrics empirical. Natural Questions "
+                "loading does not imply that every task consumes "
+                "the dataset."
+            ),
+        }
+
+        try:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+            with open(
+                DATA_DIR / "execution_summary.json",
+                "w",
+                encoding="utf-8",
+            ) as summary_file:
+                json.dump(run_summary, summary_file, indent=2)
+
+            print("[SUCCESS] Execution summary saved.")
+
+        except Exception as exc:
+            failed.append({
+                "task": "Execution Summary",
+                "error": str(exc),
+                "error_type": type(exc).__name__,
+            })
+            print(f"[ERROR] Could not save execution summary: {exc}")
+
+        # -----------------------------------------------------
+        # FINAL REPORT
+        # -----------------------------------------------------
+        print("\n" + "#" * 75)
+        print(f"PIPELINE FINISHED IN {total_time} SECONDS")
+        print(f"Completed: {len(completed)}")
+        print(f"Failed: {len(failed)}")
+        print(f"Data files: {DATA_DIR}")
+        print(f"Figures: {FIGURES_DIR}")
+        print(f"Execution summary: {DATA_DIR / 'execution_summary.json'}")
+        print("#" * 75)
 
     if failed:
         raise SystemExit(1)
+
